@@ -1,0 +1,27 @@
+Package: dominantCellStates
+Title: Dominant Cell State and Ribosome Decision Graph Analysis
+Version: 0.0.0.9000
+Authors@R: c(
+    person("Hakon", "Tjeldnes", role = c("aut", "cre"),
+           email = "hakon@example.com")
+  )
+Description: Package scaffold and local helpers for the dominant-cell-state
+    and ribosome decision graph analysis workspace. The analysis depends on a
+    local RiboCrypt checkout loaded with devtools::load_all().
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends:
+    R (>= 4.2)
+Imports:
+    utils
+Suggests:
+    data.table,
+    DT,
+    GenomicRanges,
+    IRanges,
+    plotly,
+    shiny,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
