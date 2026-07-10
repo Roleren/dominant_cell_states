@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RDG Atlas Browser Tutorial</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; color: #1f2933; line-height: 1.58; margin: 0; background: #f7fafc; }
+.doc-shell { max-width: 980px; margin: 0 auto; padding: 34px 34px 60px; background: #fff; min-height: 100vh; border-left: 1px solid #e5eaf0; border-right: 1px solid #e5eaf0; }
+h1, h2, h3 { color: #102a43; line-height: 1.2; }
+h1 { margin-top: 0; font-size: 30px; }
+h2 { border-top: 1px solid #edf1f5; padding-top: 22px; margin-top: 32px; }
+a { color: #0b5cab; }
+code { background: #f1f5f9; padding: 2px 4px; border-radius: 4px; }
+pre { background: #111827; color: #f9fafb; padding: 14px 16px; border-radius: 7px; overflow-x: auto; }
+pre code { background: transparent; padding: 0; color: inherit; }
+blockquote { border-left: 4px solid #cbd5e1; margin-left: 0; padding-left: 14px; color: #52606d; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+th, td { border: 1px solid #d9dde3; padding: 7px 9px; vertical-align: top; }
+th { background: #f1f5f9; }
+ul, ol { padding-left: 24px; }
+li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main class="doc-shell">
+<h1>RDG Atlas Browser Tutorial</h1>
+<p>Updated: 2026-07-10</p>
+<h2>Purpose</h2>
+<p>The RDG Atlas Browser is a review surface for dominant-state ribosome
+decision graph candidates. It is not a replacement for RiboCrypt coverage
+inspection. Use it to choose candidates, understand which evidence layers
+support them, and open the right RiboCrypt Observatory subset for manual
+validation.</p>
+<p>The browser answers four practical questions:</p>
+<ul>
+<li>Which gene-design rows are highest priority?</li>
+<li>Is the signal broad, context-specific, fragile, or model-discordant?</li>
+<li>Which evidence table explains the priority label?</li>
+<li>Which coverage view should be opened next in the Observatory?</li>
+</ul>
+<h2>Starting From The Standalone Repo</h2>
+<p>This analysis is being moved from:</p>
+<pre><code class="language-text">/home/roler/Desktop/forks/RiboCrypt/dominant_cell_states
+</code></pre>
+<p>to:</p>
+<pre><code class="language-text">/home/roler/Desktop/forks/dominant_cell_states
+</code></pre>
+<p>When starting a new coding/review session from the standalone location, read
+these files first:</p>
+<ul>
+<li><code>AGENTS.md</code></li>
+<li><code>README.md</code></li>
+<li><code>md/dominant_cell_state_scientific_note.md</code></li>
+<li><code>md/dominant_rdg_atlas_browser_tutorial.md</code></li>
+<li><code>NEWS.md</code></li>
+</ul>
+<p>The analysis still depends on local RiboCrypt. Set the package repo path before
+running R code:</p>
+<pre><code class="language-bash">export RIBOCRYPT_REPO=/home/roler/Desktop/forks/RiboCrypt
+</code></pre>
+<p>Use <code>devtools::load_all(Sys.getenv(&quot;RIBOCRYPT_REPO&quot;))</code>, not an installed
+RiboCrypt package. For pipeline runs, source
+<code>scripts/run_dominant_cell_state_pipeline.R</code> and let
+<code>run_dominant_cell_state_pipeline()</code> load RiboCrypt after runtime setup. For
+most table/model iterations, use <code>rdg_plot_mode = &quot;tables&quot;</code> so existing plot
+assets are preserved.</p>
+<p>Do not blindly commit generated outputs to GitHub. The local analysis folder is
+large and contains generated CSVs, caches, and static inspection assets. The
+standalone repo should track source-like files, docs, tests, app code, and small
+curated inputs; generated outputs should stay local under ignored <code>results/</code>
+unless an explicit artifact strategy is chosen. FST pages, ORFik annotations,
+BAMs, reference indexes, and other Bio_data artifacts are external runtime
+inputs and should not be copied into the package.</p>
+<h2>First Pass Review</h2>
+<p>Start in <code>Review -&gt; Cards</code>.</p>
+<ol>
+<li>Keep the default <code>Review queue</code> preset for first-pass inspection.</li>
+<li>Use the left sidebar to narrow genes, design families, evidence classes, or
+stability classes.</li>
+<li>Watch the sidebar summary. It shows how many cards, genes, and design
+families remain after filtering.</li>
+<li>Use the default <code>Review summary</code> table view to pick rows quickly.</li>
+<li>Click a row, then open <code>Selected Card</code>.</li>
+<li>Use the <code>Open in Observatory</code> button for the case/control coverage view.</li>
+</ol>
+<p>The default table intentionally hides many columns. Switch to <code>Model and stability</code>, <code>Context evidence</code>, or <code>Full scan columns</code> only when the compact
+view is not enough.</p>
+<p>For the current merged-replicate clean-CDS/uORF redistribution goal, start from
+the collapsed candidate table before opening individual context rows:</p>
+<pre><code class="language-text">dominant_rdg_merged_replicate_translon_shift/merged_replicate_translon_shift_candidate_queue.csv
+</code></pre>
+<p>The canonical local result path is:</p>
+<pre><code class="language-text">results/dominant_rdg_merged_replicate_translon_shift/merged_replicate_translon_shift_candidate_queue.csv
+</code></pre>
+<p>Read <code>next_review_action</code>, <code>pooling_benefit_class</code>, <code>pooling_loss_class</code>, and
+<code>missing_evidence_flags</code> before trusting the rank. Strong viral candidates such
+as <code>PPP1R15A</code>, <code>DDIT3</code>, <code>ATF4</code>, <code>TFE3</code>, <code>IFIH1</code>, and <code>FBXL4</code> are currently
+review leads, not claims, because many still require protocol/start-site or
+pooling audit.</p>
+<p>Use <code>Review -&gt; Label Dashboard</code> when the question is &quot;what label does the
+model need next?&quot; It shows current bridge labels, pending draft labels,
+feedback-ingest outputs, label deficits, and the active label-gap queue. Filter
+by target label class when you need negatives, confounded rows,
+measurement-problem rows, or negative controls rather than another
+positive-looking candidate. Selecting a gap row focuses the selected card and
+active-review task, and the page has direct jumps to <code>Review Labels</code>,
+<code>Inspection Assets</code>, and the Workbench. <code>Start Label Session</code> opens the first
+open label-gap task for the current target filter, configures the Workbench to
+the same target, and lands on <code>Review Labels</code>.</p>
+<p>Use <code>Review -&gt; Review Workbench</code> when the question is &quot;what should be reviewed
+next?&quot; rather than &quot;what is in the atlas card table?&quot; The workbench combines the
+active review batch, validation-label gap queue, full evidence-gap acquisition
+queue, and qualified-inspection priority table. Selecting a workbench row
+updates the selected card and, when available, the exact qualified-inspection
+source row. Use the target-label filter when the review goal is a missing label
+class rather than a queue type. The left sidebar <code>Genes</code> selector affects the
+Workbench when <code>Scope</code> is <code>Current filters</code>; <code>Scope = All queued rows</code> ignores
+the left sidebar filters. The Workbench note reports which gene scope is active,
+including when sidebar genes are ignored. For an explicit gene start, use the
+Workbench-local <code>Workbench genes</code> selector, type a gene such as <code>GABARAPL1</code>,
+and click <code>Start Session</code>. <code>Use Sidebar Genes</code> copies the left sidebar genes
+into the Workbench gene selector and switches scope to all queued rows; <code>Use Selected Gene</code> does the same for the selected card. Use the Workbench-local
+gates when you want only active label tasks, only rows with static inspection
+packets, or only protocol/pooling audit rows. The Workbench dashboard reports
+how many rows in the current scope open to <code>Review Labels</code>, <code>Inspection Assets</code>,
+or <code>Selected Card</code>, plus protocol-audit, pooling-risk, and exact-proof counts.
+To open a specific visible row, click the row and use <code>Open Selected</code>: active
+label tasks open <code>Review Labels</code>, inspection-only rows open <code>Inspection Assets</code>,
+and rows without either fall back to <code>Selected Card</code>. The selected-row card
+shows the destination, transcript, queue rank, active task, inspection source,
+target label, pooling proof/hazard, review reason, and Observatory link; <code>Gene Session</code> turns that selected row's gene into the current Workbench gene session.
+The table shows <code>review_destination</code>, <code>gene_symbol</code>, <code>tx_id</code>, and
+<code>design_family</code> before the queue metadata, then carries target-label deficit,
+label-acquisition score, <code>protocol_pooling_need</code>, pooling proof, and pooling
+hazard fields, so B03 protocol/pooling audit rows can be reviewed without
+leaving the Workbench. This is the fastest route for label acquisition, negative
+controls, context audits, and measurement/translon review rows. <code>Start Session</code>
+opens the first open active-review task under the current Workbench filters.</p>
+<p>Use <code>Review -&gt; Review Labels</code> after inspecting a workbench row. It records the
+active-review task, browser signal grade, branch/CDS/context direction checks,
+translon/isoform status, metadata confounders, negative-control result, reviewer
+notes, and next action. The action row opens the selected task in Observatory,
+<code>Inspection Assets</code>, <code>Selected Card</code>, the Workbench, or <code>Files</code> without leaving
+the review context behind. The quick-fill buttons set the common positive,
+weak-positive, negative, confounded, measurement-problem, not-reviewable, and
+negative-control patterns before you add row-specific notes. Use <code>Save Draft Label</code> when you want to stay on the same task, or <code>Save &amp; Next</code> to advance to
+the next open active-review task in the current Workbench queue, target, and
+scope. For target-balanced review, start from <code>Label Dashboard -&gt; Start Label Session</code>; for protocol or evidence audits, start from <code>Review Workbench -&gt; Start Session</code>. Saving a draft writes
+<code>dominant_rdg_review_feedback/dominant_rdg_review_label_drafts.csv</code>; it does not
+edit the linked review CSV or curated browser-validation notes. Draft rows also
+retain the Workbench target-label and protocol/pooling context so the feedback
+outputs can be audited back to the acquisition reason. Rerun the review-feedback
+step after a review pass so these drafts become normalized label rows and
+calibration candidates.</p>
+<h2>Selected Card</h2>
+<p>The <code>Selected Card</code> page is the main single-candidate summary. The metric strip
+at the top gives the fast triage view:</p>
+<ul>
+<li><code>confidence</code>: atlas confidence score.</li>
+<li><code>clean-CDS effect</code>: estimated clean-CDS output change.</li>
+<li><code>model agreement</code>: agreement tier across branch models and browser labels.</li>
+<li><code>study omission</code>: leave-one-study-out robustness class.</li>
+<li><code>grouped omission</code>: transportability under grouped omission.</li>
+<li><code>top branch</code>: dominant branch class from joint allocation.</li>
+<li><code>context interaction</code>: whether a tissue or cell-line context changes the
+branch effect.</li>
+<li><code>partial pooling</code>: whether a context effect survives shrinkage.</li>
+</ul>
+<p>Use <code>Evidence summary</code> for normal review. Use the model/context detail views
+when you need to understand why a row was ranked. Use <code>Full field dump</code> only
+when debugging a pipeline column or checking a rare warning.</p>
+<h2>Observatory Links</h2>
+<p>The <code>Links</code> column and <code>Open in Observatory</code> button encode the best available
+case/control subset.</p>
+<p>The intended inspection pattern is:</p>
+<ol>
+<li>Confirm the transcript isoform and branch annotations.</li>
+<li>Compare case and control coverage around the predicted branch point.</li>
+<li>Check whether the signal is a broad region shift or a single-position spike.</li>
+<li>Check whether clean-CDS, leader-uORF, overlapping-uORF, and internal-ORF
+patterns match the expected branch interpretation.</li>
+<li>Record browser validation only when the coverage supports the model label.</li>
+</ol>
+<p>If the link note says the subset fell back from exact context to study and
+condition, treat the view as weaker evidence. If the row is gene/transcript
+only, rebuild the subset manually before making a claim.</p>
+<h2>Evidence Pages</h2>
+<p>Use the <code>Evidence</code> group after selecting a card.</p>
+<p><code>Inspection Assets</code> is the first page to open for qualified review. It shows
+the selected review source row, readiness flags, count gates, coverage profile,
+feature allocation, RDG-flow annotation, replicate diagnostics, feature
+contrasts, replicate summaries, and transcript/RDG feature coordinates. Use this
+page to decide whether the signal is broad enough to claim, whether the top
+feature is supported by multiple runs, and whether the visible coverage matches
+the translon/RDG annotation.</p>
+<p><code>Data Readiness</code> is the mounted-data audit. It answers a different question:
+whether the selected card and global atlas page set can be reopened from the
+current S drive. It checks the ORFik all-merged library, reference FASTA/index,
+required all-sample FST pages, static inspection PNGs, and sequence flags. A
+row can be <code>sdrive_ready</code> and still not be claimable from coverage; use this
+page to separate data-access problems from biological/coverage-support
+problems.</p>
+<p><code>Branch Contexts</code> shows the matched study/condition rows behind the selected
+card. This is the best page for seeing whether a row is driven by one local
+context or repeated across several contexts.</p>
+<p><code>Study Evidence</code> shows per-study support behind model agreement and
+leave-one-study-out labels. A strong row should keep the same direction when
+important studies are omitted.</p>
+<p><code>Transport Evidence</code> shows grouped omission. This is stricter than
+leave-one-study-out because it removes related study families, protocols,
+tissues, cell lines, or condition groups.</p>
+<p><code>Context Interactions</code> compares one viral tissue or cell-line context against
+the remaining viral contexts. This page is important for genes such as IFIH1,
+where lung-like contexts can behave differently from the broad viral design.</p>
+<p><code>Partial Pooling</code> shows whether context-specific effects survive empirical
+Bayes shrinkage. Pooled-supported context rows are stronger than raw
+single-context signals.</p>
+<h2>Visual Pages</h2>
+<p>The <code>Visuals</code> group gives global filtered views.</p>
+<p><code>Heatmap</code> shows clean-CDS buffering effect by gene and design family. This is a
+protein-output-oriented view.</p>
+<p><code>Branch Heatmap</code> shows joint branch-allocation shift magnitude. This can reveal
+branch redistribution even when the aggregate clean-CDS effect is modest.</p>
+<p><code>Effect Space</code> shows confidence versus clean-CDS effect, colored by evidence
+class. Use it to see whether the current filter is dominated by large effects,
+high-confidence rows, or low-support exploratory rows.</p>
+<h2>Reports</h2>
+<p>The <code>Reports</code> page embeds generated global HTML reports. Use it when the
+question is broader than one selected card:</p>
+<ul>
+<li>dominant RDG review queues and model diagnostics;</li>
+<li>uORF and ORF-start statistics;</li>
+<li>global state, frame, infected/off-frame, and metadata QC.</li>
+</ul>
+<p>Reports are static files, so switching reports is fast. Open a report in a new
+tab when you need more screen width.</p>
+<h2>Claim Gates</h2>
+<p>Use conservative language until the evidence is strong.</p>
+<p>Review-grade evidence usually needs:</p>
+<ul>
+<li>enough branch counts in merged case and control groups;</li>
+<li>a coverage pattern that is not a single-position spike;</li>
+<li>agreement between the selected-card expectation and the Observatory view;</li>
+<li>study omission that preserves direction;</li>
+<li>grouped omission or explicit context evidence when making broad claims;</li>
+<li>translon coordinates that match the visible coverage and branch annotation.</li>
+</ul>
+<p>Context-specific claims need explicit context support. A row can be real in
+lung, A549, RD, LCL, or another context without being a universal viral
+infection rule.</p>
+<p>Counterfactual or therapeutic claims need more than the atlas browser. Treat
+therapeutic pages as hypothesis prioritization, not treatment evidence.</p>
+<h2>Practical Review Order</h2>
+<p>For the current viral/post-viral review goal, use this order:</p>
+<ol>
+<li><code>Review -&gt; Label Dashboard</code>, open rows only.</li>
+<li>Pick the target label class that matches the job: positive/negative,
+confounded, measurement problem, or negative control.</li>
+<li>Select a gap row, then jump to <code>Inspection Assets</code> or <code>Review Labels</code>.</li>
+<li><code>Review -&gt; Review Workbench</code>, scope <code>Current filters</code>, when you need to mix
+active review, evidence gaps, and qualified-inspection priorities.</li>
+<li>Pick the target-label class first if the job is label-balance driven; pick
+the queue first if the job is active review, evidence gap, or qualified
+inspection triage.</li>
+<li>Select a candidate and read <code>Selected Card -&gt; Evidence summary</code>.</li>
+<li>Open <code>Evidence -&gt; Data Readiness</code> to confirm the selected row is backed by
+mounted S-drive coverage/reference data.</li>
+<li>Open <code>Evidence -&gt; Inspection Assets</code> and check coverage, feature allocation,
+RDG flow, replicate diagnostics, and sequence-feature coordinates.</li>
+<li>Open the Observatory link and inspect coverage interactively when the static
+inspection assets look plausible or ambiguous.</li>
+<li>Record the decision in <code>Review -&gt; Review Labels</code>.</li>
+<li>Check <code>Branch Contexts</code> and <code>Study Evidence</code>.</li>
+<li>Check <code>Transport Evidence</code> for broad claims.</li>
+<li>Check <code>Context Interactions</code> and <code>Partial Pooling</code> for lung or other
+context-specific hypotheses.</li>
+<li>Use <code>Reports</code> for the global picture before promoting a candidate.</li>
+</ol>
+<p>DDIT3 is the current browser-supported consensus anchor. ATF4, PPP1R15A,
+IFIH1, VEGFA, BBC3, ATF3, PELO, and HK2 are useful review examples, but each
+has different stability and context-dependence labels.</p>
+
+</main>
+</body>
+</html>
+

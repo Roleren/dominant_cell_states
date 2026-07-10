@@ -1,0 +1,56 @@
+.pipeline_cache/
+.coverage_cache/
+.runtime/
+results/
+/htmlwidget_libs
+/htmlwidget_libs/
+
+# User-owned reference/input stores. These should live in Bio_data/S-drive
+# style locations, not in this source package.
+/Bio_data/
+/annotation/
+/annotations/
+/fst_pages/
+/fst_page_cache/
+
+# Generated analysis outputs. Source scripts, docs, tests, app code, and the
+# manual translon text input should be added explicitly.
+/dominant_*
+/postviral_fatigue_outputs
+/postviral_fatigue_outputs/
+/readlength_inputs
+/readlength_inputs/
+
+# Root-level compatibility links/files for generated products.
+/*.csv
+/dominant_pipeline_last_run_summary.csv
+/dominant_state_*.csv
+/dominant_state_*.html
+/dominant_uorf_*.csv
+/human_dominant_cell_states*.csv
+/human_dominant_state_activity_metadata*
+/required_fst_page_basenames.txt
+/required_fst_pages.csv
+/required_fst_pages.txt
+/required_fst_pages_by_gene.csv
+/required_fst_pages_summary.txt
+/required_fst_selected_transcripts.csv
+/manual_translons/manual_translon_candidates.csv
+/manual_translons/manual_translon_requested_gene_uoorf_candidates.csv
+/manual_translons/manual_translons_manifest.csv
+/manual_translons/manual_translons_ranges.rds
+
+*.rds
+*.RData
+*.fst
+*.bam
+*.bai
+*.bw
+*.bigWig
+*.sqlite
+*.csv.gz
+
+# Local editor/system files.
+.Rhistory
+.RDataTmp
+.DS_Store
