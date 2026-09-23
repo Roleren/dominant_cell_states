@@ -50,6 +50,10 @@ results/
 *.sqlite
 *.csv.gz
 
+# Rebuilt locally from the manuscript Markdown sources for Google Docs or
+# submission review. Keep the editable source, not binary exports, in Git.
+/manuscript/generated/
+
 # Local editor/system files.
 .Rhistory
 .RDataTmp
