@@ -34,3 +34,4 @@
 ^manual_translons/manual_translon_requested_gene_uoorf_candidates\.csv$
 ^manual_translons/manual_translons_manifest\.csv$
 ^manual_translons/manual_translons_ranges\.rds$
+^manuscript/generated$

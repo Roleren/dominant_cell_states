@@ -2,6 +2,121 @@
 
 This file records implementation history, motivation for pipeline changes, and iteration-level notes. The scientific interpretation now lives in `md/dominant_cell_state_scientific_note.md`.
 
+## 2026-08-19: raw tRNA gate, manuscript, and laboratory triage
+
+Motivation: the EIF4G2 candidate still required raw reconstruction of the
+source tRNA studies and an inexpensive causal decision before any costly
+mechanistic or immunopeptidomic work.
+
+Changes:
+
+- Added integrity-checked download and length-preserving preprocessing for all
+  12 tRNA-Glu/control and four matched tRNA-Arg/control RPF libraries.
+- Added per-run/per-length CDS-start P-site calibration, study-shared and
+  lane-shared phase sets, exact-uORF1 gates, separate short/canonical lane-
+  coverage gates, coordinate sensitivity and worst-case one/three-position
+  deletion. The final exact-uORF1 and lane-coverage criteria were fixed before
+  the final lane-3 case and tRNA-Arg target profiles were inspected.
+- Added a four-panel raw tRNA falsification plot and machine-readable figure
+  source data, and incorporated the raw tables into the combined evidence
+  packet and manuscript validator.
+- Added a Nature-style Markdown manuscript workspace and audited Word build for
+  Google Docs.
+- Added an explicit lab go/no-go plan. The central cheap screen is MDA-MB-231
+  vector/tRNA-Glu/tRNA-Arg crossed with EIF4G2-leader WT/uORF1-start mutant.
+  A separate HeLa untreated/UV reporter screen is an orthogonal branch/assay
+  validation and cannot rescue failure of the tRNA screen.
+
+Results:
+
+- The decisive raw tRNA-Glu lane-matched union effect is -0.13563 and the
+  exact-uORF1 effect is -0.13455, with separated biological-unit ranges and
+  phase-0-dominant exact uORF1 in all 12 Glu/control runs.
+- Study-shared and canonical 28--32-nt effects are -0.14146 and -0.14453. The
+  three independently matched lane effects are -0.12080, -0.16880 and
+  -0.13019.
+- The identically processed raw tRNA-Arg effect is +0.01182; the Glu-minus-Arg
+  effect is -0.14745 and the frozen specificity gate passes.
+- Coordinate shifts retain at least 0.11605 absolute effect, deletion of any
+  single position retains at least 0.10027, and greedy deletion of the three
+  most influential positions retains -0.06030.
+- The sparse tRNA 20--23-nt category fails its own measurement and exact-uORF1
+  phase gates and is explicitly excluded from supporting evidence.
+- The public-data observation is now raw-artifact-resistant but remains
+  non-causal; mature tRNA versus fragment, DAP5 protein and peptide--HLA output
+  remain unmeasured.
+
+## 2026-08-18: EIF4G2 exact-union, tRNA-specificity, and raw UV audit
+
+Motivation: the merged-replicate queue had no claim-ready biological example.
+EIF4G2 emerged as a high-count leader-to-CDS redistribution candidate, but it
+required explicit biological-unit collapse, peak/coordinate falsification,
+matched perturbation controls, RNA-level checking, and raw read-length-specific
+validation before interpretation.
+
+Changes:
+
+- Added exact union-uORF/clean-CDS validation with explicit replicate-first
+  biological-unit IDs, manual context axes, coordinate sensitivity, and
+  leave-one-position/top-three-position deletion tests.
+- Added explicitly non-inferential run/lane metrics and a tRNA-Glu matched
+  read-length subset audit, while retaining two biological units per arm as
+  the only replicate count.
+- Fixed manual-context validation so explicitly ignored technical axes (for
+  example `FRACTION` sequencing lanes) are also excluded when resolving the
+  unique biological context; added a focused regression test.
+- Added a combined EIF4G2 evidence packet and included a later MDA-LM2
+  nonreplication rather than reporting only supporting contrasts.
+- Added a separate EIF4G2-CDK1 tRNA-axis packet that juxtaposes tRNA-Glu and
+  tRNA-Arg biological units and peak-deletion behavior while flagging CDK1's
+  overlapping-uORF ambiguity.
+- Added a transcriptome-level tRNA-Glu versus matched tRNA-Arg leader-uORF
+  specificity/codon audit and a source-provided paired RPF/total-RNA audit.
+- Added length-preserving GSE141459 trimming/alignment and an ORFik-based
+  per-run/per-read-length P-site validator with shared phase gates, physical
+  offset validation, resumable checkpoints, coordinate sensitivity, and
+  worst-case one/three-position deletion.
+- Added focused unit tests for biological-unit collapse, union phase positions,
+  read-length strata, and ORFik offset convention.
+- Recorded the claim boundary, falsification results, primary literature, raw
+  runtime paths, and recovery commands in
+  `md/eif4g2_recycling_stress_working_note.md`.
+
+Results so far:
+
+- EIF4G2 uORF1 is the top tRNA-Glu-specific response among strict
+  count-supported non-overlapping leader uORFs shared with the tRNA-Arg
+  experiment, stable across three count thresholds and 13.3--16.0 raw-MAD
+  units above the eligible-background median.
+- An alternative-candidate audit found a strong, exact tRNA-Glu-specific CDK1
+  leader/CDS redistribution, but retained it as pathway support because six
+  overlapping near-cognate uORFs make its initiating feature ambiguous.
+- The exact tRNA-Glu contrast has two versus two biological units after six
+  lanes per arm are collapsed, separated replicate ranges, strong phase-0
+  support, and survival of single-position and pooled-top-three deletion.
+- All six tRNA-Glu technical lanes fall below all six controls in clean-CDS
+  allocation; the effect remains -0.126 to -0.150 in three independently
+  defined read-length-matched lane subsets, excluding the partial replicate-2
+  28-nt/30-nt linkage as the whole explanation.
+- The dominant NM_001418/ENST00000339995 total-RNA estimate is stable
+  (log2 Glu/control = -0.0376), arguing against mRNA or dominant-isoform change.
+- A simple transcriptome-wide Glu-codon-dose model is null; direct codon
+  causality is not claimed.
+- A later independent MDA-LM2 dataset is opposite/weak and confounded by a
+  21-nt versus 26-nt footprint/frame shift, so a general metastatic-state claim
+  is rejected.
+- Primary-literature review found that the same uORF is already experimentally
+  translated, immunogenic, and mitotic-arrest responsive. Novelty is restricted
+  to the tRNA-Glu-specific branch response and its possible connection to that
+  established biological output.
+- All four raw UV libraries now have integrity-checked unique-alignment BAMs.
+  The switch passes independently in shared well-phased canonical 28--32-nt
+  footprints (allocation delta -0.341) and short 20--23-nt footprints
+  (-0.274), with complete replicate-range separation, phase-0-dominant EIF4G2
+  uORFs, coordinate robustness, and worst-three-position deltas of -0.278 and
+  -0.238. The pooled UV effect is therefore not a read-length-composition or
+  narrow-peak artifact.
+
 ## 2026-07-10: R package scaffold and ignored results tree
 
 Motivation: after splitting `dominant_cell_states` into a standalone checkout,

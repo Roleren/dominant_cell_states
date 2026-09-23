@@ -24,14 +24,37 @@ That table collapses raw context rows into one row per gene/transcript/design
 and shift direction, with recurrence class, pooling benefit/loss class, output
 allocation context, and next review action. Current results collapse 95
 reviewable context rows to 60 candidate-direction rows. No candidate is
-currently claim-ready; many strong viral rows first need protocol/start-site or
-pooling audit.
+claim-ready directly from that queue; many strong viral rows first need
+protocol/start-site or pooling audit.
+
+A focused 2026-08-19 falsification pass produced the first unusually strong,
+experiment-ready biological candidate: tRNA-Glu(UUC)-specific redistribution
+into the exact immunogenic EIF4G2 ATG uORF1, with matched tRNA-Arg control and
+independent raw-read UV/recycling-stress recurrence. Reprocessing all 16 raw
+tRNA libraries with per-run/per-length calibration gave a lane-matched
+tRNA-Glu shift of -0.136, an exact-uORF1 shift of -0.135 and a matched
+tRNA-Arg effect of +0.012; biological-unit, canonical-footprint, coordinate and
+worst-position-deletion gates passed. The UV switch independently survives
+separate short/canonical footprint, per-length P-site, replicate-range,
+coordinate and deletion gates. It remains a causal hypothesis, not a
+demonstrated mechanism. Start with
+`md/eif4g2_recycling_stress_working_note.md` for the exact evidence and claim
+boundary.
+
+A Nature-style paper workspace is under `manuscript/`. It keeps the editable
+article, Methods, figure plan, Extended Data, cover letter and anti-overclaiming
+claim ledger in Markdown, with an audited Word export for Google Docs generated
+by `scripts/build_eif4g2_manuscript.sh`.
 
 ## Important Files To Read First
 
 - `AGENTS.md`: local operating instructions for Codex or another coding agent.
 - `md/dominant_cell_state_scientific_note.md`: scientific state, interpretation
   rules, current result counts, and next-model priorities.
+- `md/eif4g2_recycling_stress_working_note.md`: focused EIF4G2/tRNA-Glu/raw-UV
+  evidence, falsification record, novelty boundary, and recovery paths.
+- `manuscript/README.md`: Nature Article working draft, Google Docs build,
+  figure plan, submission gates, and manuscript audit.
 - `md/dominant_rdg_atlas_browser_tutorial.md`: how to use the Shiny browser and
   review surfaces.
 - `NEWS.md`: chronological implementation history.

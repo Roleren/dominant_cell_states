@@ -1,6 +1,62 @@
 # Dominant Cell States and Ribosome Decision Graphs
 
-Updated: 2026-07-10
+Updated: 2026-08-19
+
+## 2026-08-18 Focused Discovery Result
+
+The first genuinely high-contrast, artifact-resistant biological candidate is
+now the 51-nt ATG uORF1 in the EIF4G2/DAP5 leader. The most novel observation is
+that tRNA-Glu(UUC) overexpression, but not matched metastasis-promoting
+tRNA-Arg(CCG), redistributes ribosome occupancy from the EIF4G2 clean CDS into
+this exact uORF. The tRNA-Glu result has two biological replicates per arm after
+three sequencing lanes per replicate are correctly collapsed, complete
+replicate-range separation, phase-0-dominant uORF signal, coordinate and peak
+deletion robustness, stable matched total RNA/isoform composition, and the top
+Glu-minus-Arg specificity rank among strict count-supported shared leader
+uORFs. A direct transcriptome-wide Glu-codon-dose model is null, so the two GAG
+codons are a reporter hypothesis rather than an established cause.
+
+The final raw tRNA artifact gate now passes. All 12 tRNA-Glu/control and four
+tRNA-Arg/control FASTQs were integrity checked, length preserved, uniquely
+aligned and calibrated independently by run and footprint length. In the
+predeclared lane-matched pool, the tRNA-Glu union and exact-uORF1 allocation
+effects were -0.136 and -0.135, with non-overlapping true biological-unit
+ranges; the matched tRNA-Arg effect was +0.012 and the Glu-minus-Arg
+specificity contrast was -0.147. The result also passes in study-wide shared
+lengths (-0.141), canonical 28--32-nt footprints (-0.145), all three matched
+lanes, coordinate perturbations, every single-position deletion and greedy
+three-position deletion. The sparse tRNA 20--23-nt stratum failed its own
+measurement and exact-uORF1 phase gates and is not counted as evidence.
+
+The strongest independent recurrence is UV irradiation in HeLa. All four raw
+FASTQs were reprocessed with read length retained, unique GRCh38 alignment,
+per-run/per-length ORFik offset detection, independent CDS-start phase QC, and
+exact EIF4G2 mapping. The clean-CDS allocation shift survives separately in
+shared well-phased canonical 28--32-nt footprints (UV minus control = -0.341)
+and short 20--23-nt footprints (-0.274); both replicate ranges are fully
+separated. The all-shared effect is -0.343, remains -0.313 under the worst
+coordinate perturbation, -0.330 after the worst single-position deletion, and
+-0.311 after greedy removal of the three positions that most weaken it. This
+closes the principal short-footprint/P-site/pooling artifact gate for the UV
+recurrence. ABCE1 loss supplies a second, independent recycling perturbation.
+
+The biological endpoint is unusually concrete: a 2025 Nature Communications
+study independently demonstrated that the same EIF4G2 uORF produces an
+HLA-presented peptide and is inducible in a leader/start-dependent reporter
+under mitotic arrest. Current exact literature searches found no prior link
+between tRNA-Glu(UUC) and translation of this EIF4G2 immunogenic uORF. The
+candidate paper-level novelty is therefore a tRNA-pool-specific switch into an
+experimentally proven immunogenic uORF, with collision/recycling recurrence—not
+discovery of the uORF or generic tRNA/codon regulation.
+
+This is a strong computationally validated, experiment-ready hypothesis, not a
+demonstrated mechanism. It still needs tRNA-Glu perturbation reporters,
+uORF-start and GAG/GAA mutations, mature-tRNA versus tRNA-fragment separation,
+DAP5 protein measurements, and HLA immunopeptidomics. A later independent
+MDA-LM2 dataset does not reproduce a general metastatic-state direction, so no
+broad metastasis claim is made. The complete evidence, exact numbers,
+falsifications, literature boundary, runtime recovery paths, and remaining
+experiments are recorded in `md/eif4g2_recycling_stress_working_note.md`.
 
 ## Project Review Verdict
 
