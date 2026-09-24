@@ -122,6 +122,18 @@ load_ribocrypt <- function(repo_root) {
 }
 
 setup_runtime_env <- function(analysis_dir) {
+  # Capture ORFik's already-correct config (resolved via the default,
+  # un-redirected BiocFileCache) BEFORE isolating XDG/BFC state below.
+  # Once isolated, ORFik::config() can no longer see that cached entry and
+  # regenerates one from its own hardcoded, environment-naive default
+  # ("~/Bio_data/..."), which is wrong on any server where Bio_data lives
+  # elsewhere (e.g. "~/livemount/Bio_data" here). Verified directly: this
+  # reproduces with nothing more than pointing XDG_CACHE_HOME/
+  # XDG_CONFIG_HOME at a fresh empty directory.
+  orfik_config <- if (requireNamespace("ORFik", quietly = TRUE)) {
+    tryCatch(ORFik::config(), error = function(e) NULL)
+  } else NULL
+
   runtime_root <- file.path(analysis_dir, ".runtime")
   cache_dir <- file.path(runtime_root, "xdg-cache")
   config_dir <- file.path(runtime_root, "xdg-config")
@@ -134,6 +146,18 @@ setup_runtime_env <- function(analysis_dir) {
     XDG_CONFIG_HOME = config_dir,
     BFC_CACHE = bfc_dir
   )
+
+  # Re-seed the now-isolated BiocFileCache with the real config captured
+  # above, so ORFik::config() inside this isolated environment still
+  # resolves to the correct project paths instead of a wrong default.
+  if (!is.null(orfik_config) && length(orfik_config) == 4) {
+    conf_dt <- data.frame(
+      type = names(orfik_config),
+      directory = unname(orfik_config),
+      stringsAsFactors = FALSE
+    )
+    tryCatch(ORFik:::config.save(conf = conf_dt), error = function(e) NULL)
+  }
   if (requireNamespace("BiocParallel", quietly = TRUE)) {
     BiocParallel::register(
       BiocParallel::SerialParam(progressbar = FALSE),
@@ -316,10 +340,17 @@ pipeline_step_outputs <- function(analysis_dir) {
   results_dir <- analysis_results_dir(analysis_dir, create = TRUE)
   p <- function(...) file.path(results_dir, ...)
   list(
+    # dominant_manual_translons.R deliberately writes under
+    # <analysis_dir>/manual_translons/ (not results/) because these outputs
+    # are curated/regenerable-from-a-tracked-queue, not purely disposable --
+    # translons_to_be_added_to_manual.txt is git-tracked from that same
+    # directory. Using results_dir here (like every other step) made this
+    # step a permanent cache miss, since its real outputs were never where
+    # the cache checked.
     manual_translons = c(
-      p("manual_translons", "manual_translons_manifest.csv"),
-      p("manual_translons", "manual_translons_ranges.rds"),
-      p("manual_translons", "manual_translon_candidates.csv")
+      file.path(analysis_dir, "manual_translons", "manual_translons_manifest.csv"),
+      file.path(analysis_dir, "manual_translons", "manual_translons_ranges.rds"),
+      file.path(analysis_dir, "manual_translons", "manual_translon_candidates.csv")
     ),
     fst_pages = c(
       p("required_fst_pages.csv"),
@@ -1327,10 +1358,21 @@ pipeline_canonical_isoform_file <- function() {
   file.path(ORFik::refFolder(df), "canonical_isoforms.txt")
 }
 
+resolve_metadata_file <- function() {
+  candidates <- c(
+    Sys.getenv("DOMINANT_METADATA_FILE", unset = NA_character_),
+    "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv",
+    path.expand("~/livemount/Bio_data/NGS_pipeline/metadata_done_samples_extended_qc.csv")
+  )
+  candidates <- candidates[!is.na(candidates) & nzchar(candidates)]
+  existing <- candidates[file.exists(candidates)]
+  if (length(existing)) existing[[1]] else candidates[[1]]
+}
+
 pipeline_step_dependencies <- function(step_name, analysis_dir) {
   p <- function(...) file.path(analysis_dir, ...)
   rp <- function(...) file.path(analysis_results_dir(analysis_dir), ...)
-  metadata_file <- "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv"
+  metadata_file <- resolve_metadata_file()
   outputs <- pipeline_step_outputs(analysis_dir)
   canonical_isoform_file <- pipeline_canonical_isoform_file()
   base <- switch(
@@ -1550,7 +1592,7 @@ pipeline_step_dependencies <- function(step_name, analysis_dir) {
       outputs$hierarchical_joint_allocation,
       outputs$dirichlet_multinomial_allocation,
       outputs$joint_branch_allocation,
-      "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv"
+      resolve_metadata_file()
     ),
     context_interactions = c(
       outputs$joint_branch_allocation,
@@ -1653,7 +1695,7 @@ pipeline_step_dependencies <- function(step_name, analysis_dir) {
     ),
     rdg_review_links = c(
       outputs$rdg_review_batches,
-      "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv"
+      resolve_metadata_file()
     ),
     rdg_review_feedback = c(
       outputs$rdg_review_links,

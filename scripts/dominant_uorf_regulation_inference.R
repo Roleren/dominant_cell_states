@@ -18,7 +18,16 @@ analysis_dir <- if (file.exists("dominant_cell_states/human_dominant_cell_states
   "."
 }
 
-metadata_file <- "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv"
+metadata_file <- local({
+  candidates <- c(
+    Sys.getenv("DOMINANT_METADATA_FILE", unset = NA_character_),
+    "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv",
+    path.expand("~/livemount/Bio_data/NGS_pipeline/metadata_done_samples_extended_qc.csv")
+  )
+  candidates <- candidates[!is.na(candidates) & nzchar(candidates)]
+  existing <- candidates[file.exists(candidates)]
+  if (length(existing)) existing[[1]] else candidates[[1]]
+})
 diagnostics_file <- file.path(analysis_dir, "human_dominant_cell_states_clean_cds_gene_diagnostics.csv")
 feature_output <- file.path(analysis_dir, "dominant_uorf_feature_expression.csv")
 sample_model_output <- file.path(analysis_dir, "dominant_uorf_regulation_sample_model.csv")
@@ -74,6 +83,15 @@ make_display_region <- function(leader_tx, cds_tx, tx_id) {
   display <- sortPerGroup(display, quick.rev = TRUE)
   names(display) <- tx_id
   display
+}
+
+# get_lib_sizes_file() is not an ORFik function (any version) and was never
+# defined in this repo; the per-sample total library size ORFik actually
+# caches for FPKM-style normalization lives at QCfolder(df)/totalCounts_mrna.rds
+# (a named numeric vector, one value per sample -- confirmed against the real
+# all_samples-Homo_sapiens QC_STATS output).
+get_lib_sizes_file <- function(df) {
+  file.path(QCfolder(df), "totalCounts_mrna.rds")
 }
 
 library_sizes_by_run <- function(df) {
@@ -642,7 +660,11 @@ message("Translon source composition after deduplication: ",
         paste(names(table(mcols(translons)$translon_sources_merged)),
               as.integer(table(mcols(translons)$translon_sources_merged)),
               sep = "=", collapse = ", "))
-fst_index <- file.path(collection_dir_from_exp(df), "coverage_index.fst")
+# collection_dir_from_exp() returns RiboCrypt's generic "collection_tables"
+# dir; this project's own indexed coverage-page cache (see
+# dominant_cell_state_pack_fst_pages.R's documented page_source_dir) is one
+# level further, at "<that>_indexed".
+fst_index <- file.path(paste0(collection_dir_from_exp(df), "_indexed"), "coverage_index.fst")
 lib_sizes <- library_sizes_by_run(df)
 
 feature_dt <- rbindlist(lapply(seq_len(nrow(diagnostics)), function(i) {

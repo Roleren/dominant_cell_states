@@ -521,7 +521,11 @@ hit_dt <- unique(hit_dt, by = c("hotspot_id", "Run"))
 
 df <- read.experiment("all_samples-Homo_sapiens", validate = FALSE)
 run_order <- runIDs(df)
-fst_index <- file.path(collection_dir_from_exp(df), "coverage_index.fst")
+# collection_dir_from_exp() returns RiboCrypt's generic "collection_tables"
+# dir; this project's own indexed coverage-page cache (see
+# dominant_cell_state_pack_fst_pages.R's documented page_source_dir) is one
+# level further, at "<that>_indexed".
+fst_index <- file.path(paste0(collection_dir_from_exp(df), "_indexed"), "coverage_index.fst")
 if (!file.exists(fst_index)) stop("Missing FST coverage index: ", fst_index)
 
 diagnostics <- fread(

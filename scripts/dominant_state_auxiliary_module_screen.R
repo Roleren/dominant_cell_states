@@ -33,7 +33,16 @@ state_file <- file.path(analysis_dir, "human_dominant_cell_states_clean_cds.csv"
 expression_file <- file.path(
   analysis_dir, "human_dominant_cell_states_clean_cds_gene_expression.csv"
 )
-metadata_file <- "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv"
+metadata_file <- local({
+  candidates <- c(
+    Sys.getenv("DOMINANT_METADATA_FILE", unset = NA_character_),
+    "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv",
+    path.expand("~/livemount/Bio_data/NGS_pipeline/metadata_done_samples_extended_qc.csv")
+  )
+  candidates <- candidates[!is.na(candidates) & nzchar(candidates)]
+  existing <- candidates[file.exists(candidates)]
+  if (length(existing)) existing[[1]] else candidates[[1]]
+})
 atlas_file <- file.path(analysis_dir, "dominant_rdg_atlas",
                         "dominant_rdg_atlas_cards.csv")
 

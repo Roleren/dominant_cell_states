@@ -37,7 +37,16 @@ template_file <- file.path(
   "dominant_rdg_review_batches",
   "dominant_rdg_review_batch_template.csv"
 )
-metadata_file <- "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv"
+metadata_file <- local({
+  candidates <- c(
+    Sys.getenv("DOMINANT_METADATA_FILE", unset = NA_character_),
+    "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv",
+    path.expand("~/livemount/Bio_data/NGS_pipeline/metadata_done_samples_extended_qc.csv")
+  )
+  candidates <- candidates[!is.na(candidates) & nzchar(candidates)]
+  existing <- candidates[file.exists(candidates)]
+  if (length(existing)) existing[[1]] else candidates[[1]]
+})
 
 links_out <- file.path(output_dir, "dominant_rdg_review_batch_links.csv")
 template_out <- file.path(output_dir, "dominant_rdg_review_batch_template_with_links.csv")

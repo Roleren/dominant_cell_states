@@ -3,6 +3,22 @@
 Status: working note, updated 2026-08-18. This document records the current evidence
 and open falsification tests. It is not yet a biological claim.
 
+**Server-specific note (2026-09-24):** the "Safe recovery commands" and raw
+FASTQ paths under "Work in progress and recovery information" below
+(`/media/roler/S/...`, `skewer`, `/home/roler/bin/STAR-2.7.4a/...`) are the
+developer's local machine and do not exist on the full analysis server.
+`skewer` is not installed there at all. On that server, the same 16 Goodarzi
+and 4 GSE141459 runs were instead reprocessed by reusing massiveNGSpipe's
+already-fetched, already-adapter-trimmed collapsed reads (confirmed same
+adapter, compatible length window) via the new
+`scripts/dominant_rdg_reuse_massivengspipe_length_resolved.R`, with a 15-40nt
+length filter applied to match skewer's original window. This reproduced the
+manuscript's qualitative result (same direction and similar magnitude) but is
+**not numerically identical** to the frozen Gate 6 skewer-based numbers below,
+since the upstream trimming tool differs. See
+`dominant_cell_state_iteration_review_2026-09-24.md` for the open decision on
+which reprocessing path to adopt as canonical for that server.
+
 ## Current verdict after the 2026-08-18 falsification pass
 
 The strongest surviving observation is now narrower and more interesting than

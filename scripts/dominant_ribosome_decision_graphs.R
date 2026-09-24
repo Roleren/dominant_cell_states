@@ -29,7 +29,16 @@ enrichment_file <- file.path(analysis_dir, "dominant_state_clean_cds_enrichment_
 broad_rdg_terms_file <- file.path(analysis_dir, "dominant_state_broad_metadata_rdg_terms.csv")
 glmnet_rdg_terms_file <- file.path(analysis_dir, "dominant_state_glmnet_metadata_rdg_terms.csv")
 selected_fields_file <- file.path(analysis_dir, "dominant_state_broad_metadata_selected_fields.csv")
-metadata_file <- "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv"
+metadata_file <- local({
+  candidates <- c(
+    Sys.getenv("DOMINANT_METADATA_FILE", unset = NA_character_),
+    "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv",
+    path.expand("~/livemount/Bio_data/NGS_pipeline/metadata_done_samples_extended_qc.csv")
+  )
+  candidates <- candidates[!is.na(candidates) & nzchar(candidates)]
+  existing <- candidates[file.exists(candidates)]
+  if (length(existing)) existing[[1]] else candidates[[1]]
+})
 output_dir <- file.path(analysis_dir, "dominant_rdg_outputs")
 
 metadata_fields <- c("CELL_LINE", "TISSUE", "GENE", "CONDITION")
