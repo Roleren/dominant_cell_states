@@ -52,6 +52,18 @@ find_analysis_dir <- function(start = getwd()) {
 }
 
 setup_runtime_env <- function(analysis_dir) {
+  # Capture ORFik's already-correct config (resolved via the default,
+  # un-redirected BiocFileCache) BEFORE isolating XDG/BFC state below.
+  # Once isolated, ORFik::config() can no longer see that cached entry and
+  # regenerates one from its own hardcoded, environment-naive default
+  # ("~/Bio_data/..."), which is wrong on any server where Bio_data lives
+  # elsewhere (e.g. "~/livemount/Bio_data" here). Verified directly: this
+  # reproduces with nothing more than pointing XDG_CACHE_HOME/
+  # XDG_CONFIG_HOME at a fresh empty directory.
+  orfik_config <- if (requireNamespace("ORFik", quietly = TRUE)) {
+    tryCatch(ORFik::config(), error = function(e) NULL)
+  } else NULL
+
   runtime_root <- file.path(analysis_dir, ".runtime")
   cache_dir <- file.path(runtime_root, "xdg-cache")
   config_dir <- file.path(runtime_root, "xdg-config")
@@ -64,6 +76,18 @@ setup_runtime_env <- function(analysis_dir) {
     XDG_CONFIG_HOME = config_dir,
     BFC_CACHE = bfc_dir
   )
+
+  # Re-seed the now-isolated BiocFileCache with the real config captured
+  # above, so ORFik::config() inside this isolated environment still
+  # resolves to the correct project paths instead of a wrong default.
+  if (!is.null(orfik_config) && length(orfik_config) == 4) {
+    conf_dt <- data.frame(
+      type = names(orfik_config),
+      directory = unname(orfik_config),
+      stringsAsFactors = FALSE
+    )
+    tryCatch(ORFik:::config.save(conf = conf_dt), error = function(e) NULL)
+  }
 }
 
 repo_root <- find_repo_root()
@@ -159,12 +183,43 @@ dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
 sdrive_root <- Sys.getenv("RDG_SDRIVE_ROOT", unset = "/media/roler/S")
 experiment_name <- Sys.getenv("RDG_SDRIVE_EXPERIMENT",
-                              unset = "human_all_merged_l50")
-all_samples_collection_dir <- file.path(
-  sdrive_root,
-  "data/Bio_data/processed_data/Ribo-seq/all_samples-Homo_sapiens",
-  "collection_tables_indexed"
+                              unset = "all_merged-Homo_sapiens")
+# Two layouts are in play: the S-drive convention nests an extra "Ribo-seq/"
+# path segment under processed_data/, while the full server (this host)
+# keeps "all_samples-Homo_sapiens/collection_tables_indexed/" directly under
+# processed_data/ with no such segment. Try the server-relative path (derived
+# from ORFik's own processed_data root, not hardcoded) first, then fall back
+# to the legacy S-drive path.
+all_samples_collection_dir_candidates <- c(
+  Sys.getenv("RDG_ALL_SAMPLES_COLLECTION_DIR", unset = NA_character_),
+  {
+    # "all_samples-Homo_sapiens" is a union experiment spanning many
+    # per-study libFolders, so ORFik::libFolder() on it resolves to
+    # whichever individual study's row comes first, not a shared
+    # "all_samples" directory. The processed_data root from ORFik::config()
+    # is the reliable way to locate the real collection_tables_indexed dir.
+    server_processed_root <- tryCatch(
+      path.expand(unname(ORFik::config()["bam"])),
+      error = function(e) NA_character_
+    )
+    if (!is.na(server_processed_root)) {
+      file.path(server_processed_root, "all_samples-Homo_sapiens",
+               "collection_tables_indexed")
+    } else NA_character_
+  },
+  file.path(sdrive_root,
+           "data/Bio_data/processed_data/Ribo-seq/all_samples-Homo_sapiens",
+           "collection_tables_indexed")
 )
+all_samples_collection_dir_candidates <-
+  all_samples_collection_dir_candidates[!is.na(all_samples_collection_dir_candidates)]
+existing_collection_dirs <-
+  all_samples_collection_dir_candidates[dir.exists(all_samples_collection_dir_candidates)]
+all_samples_collection_dir <- if (length(existing_collection_dirs)) {
+  existing_collection_dirs[[1]]
+} else {
+  all_samples_collection_dir_candidates[[1]]
+}
 fst_index_file <- file.path(all_samples_collection_dir, "coverage_index.fst")
 
 status_rows <- list()
@@ -189,15 +244,18 @@ add_status("sdrive_mount", mount_ok, sdrive_root,
 
 experiment <- NULL
 experiment_error <- ""
-if (mount_ok) {
-  experiment <- tryCatch(
-    ORFik::read.experiment(experiment_name, validate = FALSE),
-    error = function(e) {
-      experiment_error <<- conditionMessage(e)
-      NULL
-    }
-  )
-}
+# Do not gate this on mount_ok: ORFik::read.experiment() resolves its own
+# paths (ORFik::config()-based on this server) and does not require the
+# configured S-drive root to be mounted. Gating here produced a false
+# "error" status (rather than attempting the load) whenever sdrive_root
+# genuinely does not apply to the current machine.
+experiment <- tryCatch(
+  ORFik::read.experiment(experiment_name, validate = FALSE),
+  error = function(e) {
+    experiment_error <<- conditionMessage(e)
+    NULL
+  }
+)
 experiment_ok <- !is.null(experiment)
 add_status(
   "orfik_experiment_load",
@@ -225,7 +283,10 @@ if (experiment_ok) {
   fasta_path <- extract_fafile_member(fa, "path")
   fasta_index_path <- extract_fafile_member(fa, "index")
   fasta_gzindex_path <- extract_fafile_member(fa, "gzindex")
-  txdb_path <- tryCatch(scalar_text(ORFik::txdbFile(experiment)),
+  # ORFik::txdbFile() does not exist in the installed ORFik version on this
+  # server (neither exported nor internal); the experiment object itself
+  # carries the resolved txdb path directly on its @txdb slot.
+  txdb_path <- tryCatch(scalar_text(experiment@txdb),
                         error = function(e) {
                           txdb_error <<- conditionMessage(e)
                           ""
@@ -250,8 +311,17 @@ add_status("reference_fasta", file.exists(fasta_path), fasta_path,
            "Primary genome FASTA returned by ORFik::findFa().")
 add_status("reference_fasta_index", file.exists(fasta_index_path),
            fasta_index_path, "FASTA .fai index.")
-add_status("reference_fasta_gzindex", file.exists(fasta_gzindex_path),
-           fasta_gzindex_path, "FASTA .gzi index if present.")
+# .gzi is only meaningful for a bgzip-compressed FASTA (Rsamtools random
+# access); a plain, uncompressed .fa has no .gzi and needs none, so only
+# flag this as missing when the FASTA itself is actually gzipped.
+fasta_is_gzipped <- grepl("\\.(gz|bgz)$", fasta_path)
+add_status(
+  "reference_fasta_gzindex",
+  !fasta_is_gzipped || file.exists(fasta_gzindex_path),
+  fasta_gzindex_path,
+  if (fasta_is_gzipped) "FASTA .gzi index if present." else
+    "Not applicable: reference FASTA is not bgzip-compressed."
+)
 add_status(
   "reference_txdb",
   file.exists(txdb_path),
@@ -269,7 +339,11 @@ if (nzchar(lib_folder)) {
     file.path(lib_folder, "all_in_one_l50_forward.bigWig"),
     file.path(lib_folder, "all_in_one_l50_reverse.bigWig"),
     file.path(lib_folder, "bigwig", "all_in_onel50_forward.bigWig"),
-    file.path(lib_folder, "bigwig", "all_in_onel50_reverse.bigWig")
+    file.path(lib_folder, "bigwig", "all_in_onel50_reverse.bigWig"),
+    # Naming convention seen on the full server (all_merged-Homo_sapiens):
+    # "all_<strand>.bigWig" directly under bigwig/, not "all_in_one_l50_*".
+    file.path(lib_folder, "bigwig", "all_forward.bigWig"),
+    file.path(lib_folder, "bigwig", "all_reverse.bigWig")
   )
 }
 forward_bigwigs <- bigwig_candidates[grepl("forward\\.bigWig$", bigwig_candidates)]
@@ -288,12 +362,16 @@ add_status(
 )
 
 count_table_kinds <- c("cds", "leaders", "mrna", "trailers", "uorfs")
-count_table_paths <- if (nzchar(lib_folder)) {
-  file.path(lib_folder, "QC_STATS", paste0("countTable_",
-                                           count_table_kinds, ".rds"))
-} else {
-  rep("", length(count_table_kinds))
+# The server's ORFik count tables are saved as .qs (qs::qsave), not .rds;
+# check both, preferring whichever actually exists on disk.
+count_table_path_for <- function(kind) {
+  if (!nzchar(lib_folder)) return("")
+  candidates <- file.path(lib_folder, "QC_STATS",
+                          paste0("countTable_", kind, c(".qs", ".rds")))
+  existing <- candidates[file.exists(candidates)]
+  if (length(existing)) existing[[1]] else candidates[[1]]
 }
+count_table_paths <- vapply(count_table_kinds, count_table_path_for, character(1))
 for (i in seq_along(count_table_kinds)) {
   add_status(
     paste0("all_merged_count_table_", count_table_kinds[[i]]),
@@ -470,7 +548,13 @@ for (column in c(
   transcript_readiness[is.na(get(column)), (column) := 0]
 }
 for (column in c(
-  "required_fst_page_basenames", "missing_required_fst_page_basenames"
+  "required_fst_page_basenames", "missing_required_fst_page_basenames",
+  # inspection_readiness/status come from qualified_inspection_manifest.csv;
+  # on a fresh checkout (that step has not run yet), transcript_readiness
+  # falls back to an empty table without these columns, and the
+  # sdrive_readiness_class/review_support_class fcase() below reads them
+  # unconditionally -- default them so this audit can run before that step.
+  "inspection_readiness", "status"
 )) {
   if (!column %in% names(transcript_readiness)) {
     transcript_readiness[, (column) := ""]

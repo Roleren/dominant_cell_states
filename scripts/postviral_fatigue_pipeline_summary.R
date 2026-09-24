@@ -32,7 +32,16 @@ analysis_dir <- if (file.exists("human_dominant_cell_states_clean_cds.csv")) {
 }
 
 fatigue_state <- "Post-viral fatigue / ribosome stress"
-metadata_file <- "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv"
+metadata_file <- local({
+  candidates <- c(
+    Sys.getenv("DOMINANT_METADATA_FILE", unset = NA_character_),
+    "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv",
+    path.expand("~/livemount/Bio_data/NGS_pipeline/metadata_done_samples_extended_qc.csv")
+  )
+  candidates <- candidates[!is.na(candidates) & nzchar(candidates)]
+  existing <- candidates[file.exists(candidates)]
+  if (length(existing)) existing[[1]] else candidates[[1]]
+})
 output_dir <- file.path(analysis_dir, "postviral_fatigue_outputs")
 figure_dir <- file.path(output_dir, "figures")
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)

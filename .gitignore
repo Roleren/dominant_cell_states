@@ -1,6 +1,7 @@
 .pipeline_cache/
 .coverage_cache/
 .runtime/
+.runtime_inputs/
 results/
 /htmlwidget_libs
 /htmlwidget_libs/

@@ -2,6 +2,31 @@
 
 Last updated: 2026-05-21
 
+## Status update: 2026-09-24
+
+The "Immediate implementation plan" below (steps 1-7) has been substantially
+executed since this note was first written. The dominant-state atlas now has a
+real `Post-viral fatigue / ribosome stress` module, a `fatigue_summary`
+pipeline step (`postviral_fatigue_pipeline_summary.R`), and iORF/NTT
+diagnostics, exactly as proposed. Concrete quantitative results now exist:
+DDIT3, PPP1R15A, ATF4, and IFIH1 are current viral-infection clean-CDS
+candidates (+87%, +128%, +81%, +38% respectively), and a therapeutic-
+perturbation layer ranks "ISR/eIF2B-ATF4 attenuation" as the top hypothesis
+with quantified half-normalization targets. See
+`dominant_cell_state_scientific_note.md` for the full current results and
+`dominant_cell_state_iteration_review_2026-09-24.md` for what is missing next.
+
+The single biggest remaining gap is that, unlike EIF4G2, this story still has
+**no lab go/no-go plan**. `long_covid_me_cfs_medications_overview.md`
+confirms no existing approved therapy targets the ISR/ATF4/uORF axis directly,
+which makes this a genuine white-space therapeutic hypothesis rather than a
+crowded one -- and therefore a strong candidate for the same cheap-screen-first
+discipline used in `eif4g2_lab_go_no_go_plan.md`. The rest of this document
+(literature summary, gene modules, practical model tests) remains a useful
+historical record of the original hypothesis and is not superseded, but its
+"Immediate implementation plan" and "Bottom line" sections below should be read
+as largely completed rather than pending.
+
 ## Working hypothesis
 
 Viral infection may leave a persistent translational state where host ribosomes are not simply "globally lower", but are rerouted across transcript architecture. The most interesting version of the hypothesis is:

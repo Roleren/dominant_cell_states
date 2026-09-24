@@ -29,7 +29,16 @@ dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
 result_file <- function(...) file.path(results_dir, ...)
 
 state_file <- result_file("human_dominant_cell_states_clean_cds.csv")
-metadata_file <- "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv"
+metadata_file <- local({
+  candidates <- c(
+    Sys.getenv("DOMINANT_METADATA_FILE", unset = NA_character_),
+    "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv",
+    path.expand("~/livemount/Bio_data/NGS_pipeline/metadata_done_samples_extended_qc.csv")
+  )
+  candidates <- candidates[!is.na(candidates) & nzchar(candidates)]
+  existing <- candidates[file.exists(candidates)]
+  if (length(existing)) existing[[1]] else candidates[[1]]
+})
 metadata_fields <- c("CELL_LINE", "TISSUE", "GENE", "CONDITION")
 min_level_n <- 3L
 min_covariate_n <- 5L

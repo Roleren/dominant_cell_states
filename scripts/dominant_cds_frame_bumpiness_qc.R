@@ -54,7 +54,16 @@ housekeeping_candidate_genes <- c(
   "ACTB", "GAPDH", "HPRT1", "TBP", "PPIA", "UBC", "YWHAZ",
   "EEF1A1", "PSMB4", "TPT1", "RPL27", "RPL30", "RPS18", "RPS27A"
 )
-metadata_file <- "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv"
+metadata_file <- local({
+  candidates <- c(
+    Sys.getenv("DOMINANT_METADATA_FILE", unset = NA_character_),
+    "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv",
+    path.expand("~/livemount/Bio_data/NGS_pipeline/metadata_done_samples_extended_qc.csv")
+  )
+  candidates <- candidates[!is.na(candidates) & nzchar(candidates)]
+  existing <- candidates[file.exists(candidates)]
+  if (length(existing)) existing[[1]] else candidates[[1]]
+})
 diagnostics_file <- file.path(
   analysis_dir, "human_dominant_cell_states_clean_cds_gene_diagnostics.csv"
 )
@@ -471,7 +480,11 @@ summarize_recurrent_hotspots <- function(per_run_hotspots, group_name,
 
 df <- read.experiment("all_samples-Homo_sapiens", validate = FALSE)
 run_order <- runIDs(df)
-fst_index <- file.path(collection_dir_from_exp(df), "coverage_index.fst")
+# collection_dir_from_exp() returns RiboCrypt's generic "collection_tables"
+# dir; this project's own indexed coverage-page cache (see
+# dominant_cell_state_pack_fst_pages.R's documented page_source_dir) is one
+# level further, at "<that>_indexed".
+fst_index <- file.path(paste0(collection_dir_from_exp(df), "_indexed"), "coverage_index.fst")
 if (!file.exists(fst_index)) stop("Missing FST coverage index: ", fst_index)
 
 diagnostics <- fread(diagnostics_file)

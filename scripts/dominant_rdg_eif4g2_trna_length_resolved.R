@@ -102,7 +102,7 @@ if (length(missing_bams)) {
 }
 run_table[, bam_ready := NULL]
 
-experiment <- ORFik::read.experiment("human_all_merged_l50")
+experiment <- ORFik::read.experiment(Sys.getenv("RDG_SDRIVE_EXPERIMENT", unset = "all_merged-Homo_sapiens"))
 txdb <- ORFik::loadTxdb(experiment)
 target_tx_id <- "ENST00000339995"
 target_tx <- ORFik::loadRegion(

@@ -325,6 +325,15 @@ get_sample_names <- function(df) {
   sample
 }
 
+# get_lib_sizes_file() is not an ORFik function (any version) and was never
+# defined in this repo; the per-sample total library size ORFik actually
+# caches for FPKM-style normalization lives at QCfolder(df)/totalCounts_mrna.rds
+# (a named numeric vector, one value per sample -- confirmed against the real
+# all_samples-Homo_sapiens QC_STATS output).
+get_lib_sizes_file <- function(df) {
+  file.path(QCfolder(df), "totalCounts_mrna.rds")
+}
+
 library_sizes_by_run <- function(df) {
   lib_sizes <- readRDS(get_lib_sizes_file(df))
   if (length(lib_sizes) == nrow(df)) {
@@ -410,9 +419,9 @@ empty_cds_exon_coverage_qc <- function() {
 
 measure_aggregate_cds_exon_qc <- function(cds_all) {
   aggregate_df <- tryCatch(
-    read.experiment("human_all_merged_l50", validate = FALSE),
+    read.experiment(Sys.getenv("RDG_SDRIVE_EXPERIMENT", unset = "all_merged-Homo_sapiens"), validate = FALSE),
     error = function(e) {
-      warning("Could not load human_all_merged_l50 for CDS exon QC: ",
+      warning("Could not load the all-merged experiment (", Sys.getenv("RDG_SDRIVE_EXPERIMENT", unset = "all_merged-Homo_sapiens"), ") for CDS exon QC: ",
               conditionMessage(e))
       NULL
     }
@@ -423,7 +432,7 @@ measure_aggregate_cds_exon_qc <- function(cds_all) {
                               error = function(e) NULL)
   aggregate_paths <- unlist(aggregate_reads, use.names = FALSE)
   if (length(aggregate_paths) == 0 || !all(file.exists(aggregate_paths))) {
-    warning("Skipping CDS exon QC because human_all_merged_l50 bigWig paths ",
+    warning("Skipping CDS exon QC because ", Sys.getenv("RDG_SDRIVE_EXPERIMENT", unset = "all_merged-Homo_sapiens"), " bigWig paths ",
             "are unavailable.")
     return(empty_cds_exon_coverage_qc())
   }
@@ -647,7 +656,11 @@ symbols <- load_symbol_table(df)
 translons <- load_predicted_translons(df)
 canonical_info <- get_canonical_isoform_info(df)
 canonical_tx <- canonical_info$tx
-fst_index <- file.path(collection_dir_from_exp(df), "coverage_index.fst")
+# collection_dir_from_exp() returns RiboCrypt's generic "collection_tables"
+# dir; this project's own indexed coverage-page cache (see
+# dominant_cell_state_pack_fst_pages.R's documented page_source_dir) is one
+# level further, at "<that>_indexed".
+fst_index <- file.path(paste0(collection_dir_from_exp(df), "_indexed"), "coverage_index.fst")
 if (!file.exists(fst_index)) stop("Missing FST coverage index: ", fst_index)
 lib_sizes <- library_sizes_by_run(df)
 

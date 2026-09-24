@@ -255,7 +255,7 @@ genomic_string <- function(gr) {
 score_with_merged_rfp <- function(df_activity, candidates, mrna) {
   libs <- outputLibs(df_activity, type = "pshifted", output.mode = "envirlist")
   if (length(libs) < 1) {
-    stop("No pshifted libraries were returned by outputLibs() for human_all_merged_l50.")
+    stop("No pshifted libraries were returned by outputLibs() for the all-merged experiment (", Sys.getenv("RDG_SDRIVE_EXPERIMENT", unset = "all_merged-Homo_sapiens"), ").")
   }
   rfp <- libs[[1]]
   start_gr <- startSites(candidates, TRUE, TRUE, TRUE)
@@ -350,8 +350,8 @@ candidate_dt <- data.table(
   missing_from_T_TC = !candidate_key %chin% t_tc_key
 )
 
-message("Scoring manual uoORF candidates on human_all_merged_l50 pshifted coverage")
-df_activity <- ORFik::read.experiment("human_all_merged_l50", validate = FALSE)
+message("Scoring manual uoORF candidates on ", Sys.getenv("RDG_SDRIVE_EXPERIMENT", unset = "all_merged-Homo_sapiens"), " pshifted coverage")
+df_activity <- ORFik::read.experiment(Sys.getenv("RDG_SDRIVE_EXPERIMENT", unset = "all_merged-Homo_sapiens"), validate = FALSE)
 activity_scores <- score_with_merged_rfp(df_activity, uo_candidates, mrna)
 candidate_dt <- cbind(candidate_dt, activity_scores)
 

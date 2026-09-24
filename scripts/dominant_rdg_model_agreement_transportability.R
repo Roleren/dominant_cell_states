@@ -34,7 +34,16 @@ dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
 htmlwidget_helper <- file.path(analysis_dir, "scripts", "dominant_htmlwidgets.R")
 if (file.exists(htmlwidget_helper)) source(htmlwidget_helper)
 
-metadata_file <- "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv"
+metadata_file <- local({
+  candidates <- c(
+    Sys.getenv("DOMINANT_METADATA_FILE", unset = NA_character_),
+    "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv",
+    path.expand("~/livemount/Bio_data/NGS_pipeline/metadata_done_samples_extended_qc.csv")
+  )
+  candidates <- candidates[!is.na(candidates) & nzchar(candidates)]
+  existing <- candidates[file.exists(candidates)]
+  if (length(existing)) existing[[1]] else candidates[[1]]
+})
 
 read_dt <- function(path, required = FALSE, ...) {
   if (!file.exists(path)) {

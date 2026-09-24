@@ -14,7 +14,16 @@ suppressPackageStartupMessages({
 })
 
 analysis_dir <- if (dir.exists("dominant_cell_states")) "dominant_cell_states" else "."
-metadata_file <- "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv"
+metadata_file <- local({
+  candidates <- c(
+    Sys.getenv("DOMINANT_METADATA_FILE", unset = NA_character_),
+    "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv",
+    path.expand("~/livemount/Bio_data/NGS_pipeline/metadata_done_samples_extended_qc.csv")
+  )
+  candidates <- candidates[!is.na(candidates) & nzchar(candidates)]
+  existing <- candidates[file.exists(candidates)]
+  if (length(existing)) existing[[1]] else candidates[[1]]
+})
 labels_file <- file.path(
   analysis_dir,
   "dominant_state_score_semantics",
