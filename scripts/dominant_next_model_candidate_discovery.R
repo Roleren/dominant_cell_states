@@ -41,6 +41,8 @@ analysis_dir <- if (file.exists("dominant_rdg_outputs/rdg_feature_annotation.csv
   "."
 }
 
+source(file.path(analysis_dir, "R", "stats.R"), local = TRUE)
+
 results_dir <- Sys.getenv(
   "DOMINANT_CELL_STATES_RESULTS_DIR",
   unset = file.path(analysis_dir, "results")
@@ -257,7 +259,7 @@ bootstrap_cds_contrast <- function(case_rel, control_rel,
   control_fpkm <- as.numeric(control_fpkm[is.finite(control_fpkm)])
   if (length(case_rel) < 2 || length(control_rel) < 2 ||
       length(case_fpkm) < 2 || length(control_fpkm) < 2) {
-    return(data.table(
+    return(list(
       bootstrap_iterations = 0L,
       bootstrap_relative_use_delta_sd = NA_real_,
       bootstrap_relative_use_delta_lower = NA_real_,
@@ -267,18 +269,24 @@ bootstrap_cds_contrast <- function(case_rel, control_rel,
       bootstrap_fpkm_log2_fc_upper = NA_real_
     ))
   }
-  rel_delta <- numeric(n_boot)
-  fpkm_log2_fc <- numeric(n_boot)
+  # Draw the resamples in the original order (four draws per iteration) so
+  # the RNG stream is unchanged, then take all means at once. The inputs are
+  # finite, so rowMeans() equals mean() up to its second-pass rounding step.
+  n1 <- length(case_rel); n2 <- length(control_rel)
+  n3 <- length(case_fpkm); n4 <- length(control_fpkm)
+  i1 <- matrix(0L, n_boot, n1); i2 <- matrix(0L, n_boot, n2)
+  i3 <- matrix(0L, n_boot, n3); i4 <- matrix(0L, n_boot, n4)
   for (b in seq_len(n_boot)) {
-    case_rel_b <- case_rel[sample.int(length(case_rel), length(case_rel), replace = TRUE)]
-    control_rel_b <- control_rel[sample.int(length(control_rel), length(control_rel), replace = TRUE)]
-    case_fpkm_b <- case_fpkm[sample.int(length(case_fpkm), length(case_fpkm), replace = TRUE)]
-    control_fpkm_b <- control_fpkm[sample.int(length(control_fpkm), length(control_fpkm), replace = TRUE)]
-    rel_delta[[b]] <- mean(case_rel_b, na.rm = TRUE) - mean(control_rel_b, na.rm = TRUE)
-    fpkm_log2_fc[[b]] <- log2((mean(case_fpkm_b, na.rm = TRUE) + 1) /
-                                (mean(control_fpkm_b, na.rm = TRUE) + 1))
+    i1[b, ] <- sample.int(n1, n1, replace = TRUE)
+    i2[b, ] <- sample.int(n2, n2, replace = TRUE)
+    i3[b, ] <- sample.int(n3, n3, replace = TRUE)
+    i4[b, ] <- sample.int(n4, n4, replace = TRUE)
   }
-  data.table(
+  boot_mean <- function(x, idx) rowMeans(matrix(x[idx], nrow = n_boot))
+  rel_delta <- boot_mean(case_rel, i1) - boot_mean(control_rel, i2)
+  fpkm_log2_fc <- log2((boot_mean(case_fpkm, i3) + 1) /
+                         (boot_mean(control_fpkm, i4) + 1))
+  list(
     bootstrap_iterations = n_boot,
     bootstrap_relative_use_delta_sd = safe_sd(rel_delta),
     bootstrap_relative_use_delta_lower = safe_quantile(rel_delta, 0.025),
@@ -403,8 +411,12 @@ safe_wilcox <- function(case_score, control_score, alternative = "two.sided", mi
   if (length(case_score) < min_n || length(control_score) < min_n) return(NA_real_)
   if (length(unique(c(case_score, control_score))) < 2) return(NA_real_)
   tryCatch(
-    wilcox.test(case_score, control_score, alternative = alternative,
-                exact = FALSE)$p.value,
+    if (identical(alternative, "two.sided")) {
+      dcs_wilcox_p(case_score, control_score)
+    } else {
+      wilcox.test(case_score, control_score, alternative = alternative,
+                  exact = FALSE)$p.value
+    },
     error = function(e) NA_real_
   )
 }
@@ -1160,12 +1172,13 @@ if (nrow(feature_expression) > 0 && file.exists(metadata_file)) {
     "n_uorfs", "n_overlapping_uorfs", "has_overlapping_uorf",
     "n_uorfs_with_m_support"
   )
+  matched_rows_by_stratum <- split(seq_len(nrow(matched_fx)),
+                                   matched_fx$stratum_id)
   matched_feature_contrasts <- rbindlist(
     lapply(seq_len(nrow(contrast_terms)), function(i) {
       term <- contrast_terms[i]
-      s <- matched_fx[
-        stratum_id == term$stratum_id &
-          (is_control_condition == TRUE | CONDITION == term$case_condition)
+      s <- matched_fx[matched_rows_by_stratum[[term$stratum_id]] %||% 0L][
+        is_control_condition == TRUE | CONDITION == term$case_condition
       ]
       if (nrow(s) == 0) return(NULL)
       s[, matched_group := fifelse(is_control_condition == TRUE, "control", "case")]
@@ -1451,12 +1464,13 @@ if (nrow(feature_expression) > 0 && file.exists(metadata_file)) {
       "measured_bases", "measurement_scope"
     )
 
+    bump_rows_by_stratum <- split(seq_len(nrow(internal_bump_fx)),
+                                  internal_bump_fx$stratum_id)
     internal_orf_matched_bump <- rbindlist(
       lapply(seq_len(nrow(internal_bump_terms)), function(i) {
         term <- internal_bump_terms[i]
-        s <- internal_bump_fx[
-          stratum_id == term$stratum_id &
-            (is_control_condition == TRUE | CONDITION == term$case_condition)
+        s <- internal_bump_fx[bump_rows_by_stratum[[term$stratum_id]] %||% 0L][
+          is_control_condition == TRUE | CONDITION == term$case_condition
         ]
         if (nrow(s) == 0) return(NULL)
         s[, matched_group := fifelse(
@@ -1683,28 +1697,36 @@ if (nrow(feature_expression) > 0 && file.exists(metadata_file)) {
       gene_symbol, tx_id, feature_id, stratum_id, case_condition,
       sample_set_signature
     )])
+    # Row indices per (gene, tx, stratum) in key order, as the keyed join
+    # returned them; a missing key gives one all-NA row, as the join did.
+    cds_rows <- split(seq_len(nrow(cds_sample)),
+                      paste(cds_sample$gene_symbol, cds_sample$tx_id,
+                            cds_sample$stratum_id, sep = "\r"))
+    boot_lookup <- paste(bootstrap_keys$gene_symbol, bootstrap_keys$tx_id,
+                         bootstrap_keys$stratum_id, sep = "\r")
+    cds_condition <- cds_sample$CONDITION
+    cds_is_control <- cds_sample$is_control_condition
+    cds_rel <- cds_sample$relative_use_uorf_model
+    cds_fpkm <- cds_sample$fpkm_like
     matched_cds_bootstrap <- rbindlist(
       lapply(seq_len(nrow(bootstrap_keys)), function(i) {
-        key <- bootstrap_keys[i]
-        s <- cds_sample[.(key$gene_symbol, key$tx_id, key$stratum_id)]
-        if (nrow(s) == 0) return(NULL)
-        is_case <- s$CONDITION == key$case_condition
-        is_control <- s$is_control_condition == TRUE
+        rows <- cds_rows[[boot_lookup[[i]]]] %||% NA_integer_
+        is_case <- cds_condition[rows] == bootstrap_keys$case_condition[[i]]
+        is_control <- cds_is_control[rows] == TRUE
         out <- bootstrap_cds_contrast(
-          s$relative_use_uorf_model[is_case],
-          s$relative_use_uorf_model[is_control],
-          s$fpkm_like[is_case],
-          s$fpkm_like[is_control]
+          cds_rel[rows][is_case],
+          cds_rel[rows][is_control],
+          cds_fpkm[rows][is_case],
+          cds_fpkm[rows][is_control]
         )
-        out[, `:=`(
-          gene_symbol = key$gene_symbol,
-          tx_id = key$tx_id,
-          feature_id = key$feature_id,
-          stratum_id = key$stratum_id,
-          case_condition = key$case_condition,
-          sample_set_signature = key$sample_set_signature
-        )]
-        out
+        c(out, list(
+          gene_symbol = bootstrap_keys$gene_symbol[[i]],
+          tx_id = bootstrap_keys$tx_id[[i]],
+          feature_id = bootstrap_keys$feature_id[[i]],
+          stratum_id = bootstrap_keys$stratum_id[[i]],
+          case_condition = bootstrap_keys$case_condition[[i]],
+          sample_set_signature = bootstrap_keys$sample_set_signature[[i]]
+        ))
       }),
       fill = TRUE
     )
