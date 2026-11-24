@@ -209,8 +209,56 @@ write_pipeline_runtime_options <- function(analysis_dir, rdg_plot_mode) {
   option_file
 }
 
+# Optional internal steps -------------------------------------------------
+# A local, untracked file scripts/local_optional_steps.R may register extra
+# internal steps that are not part of the published pipeline. It defines
+# local_optional_steps(analysis_dir), returning a list of step specs:
+#   step, script (file name under scripts/), after (anchor step: the step is
+#   inserted right after it in the registry and in every scope containing it),
+#   outputs = function(p), dependencies = function(rp, metadata_file),
+#   coverage_consumer (TRUE when the step reads megafst coverage) and an
+#   optional cache_check = function(results_dir, cache_state).
+# Without the file the pipeline runs without these steps.
+pipeline_optional_steps_file <- function(analysis_dir) {
+  file.path(analysis_dir, "scripts", "local_optional_steps.R")
+}
+
+pipeline_optional_steps <- function(analysis_dir) {
+  hook <- pipeline_optional_steps_file(analysis_dir)
+  if (!file.exists(hook)) return(list())
+  env <- new.env(parent = globalenv())
+  sys.source(hook, envir = env)
+  env$local_optional_steps(analysis_dir)
+}
+
+pipeline_optional_step_spec <- function(step_name, analysis_dir) {
+  for (spec in pipeline_optional_steps(analysis_dir)) {
+    if (identical(spec$step, step_name)) return(spec)
+  }
+  NULL
+}
+
+pipeline_insert_optional_steps <- function(steps, optional) {
+  for (spec in optional) {
+    anchor <- match(spec$after, steps)
+    if (is.na(anchor) || spec$step %in% steps) next
+    steps <- append(steps, spec$step, after = anchor)
+  }
+  steps
+}
+
+pipeline_optional_coverage_consumers <- function(analysis_dir = NULL) {
+  if (is.null(analysis_dir)) {
+    analysis_dir <- tryCatch(find_analysis_dir(), error = function(e) NULL)
+  }
+  if (is.null(analysis_dir)) return(character())
+  optional <- pipeline_optional_steps(analysis_dir)
+  steps <- vapply(optional, `[[`, character(1), "step")
+  steps[vapply(optional, function(spec) isTRUE(spec$coverage_consumer), logical(1))]
+}
+
 pipeline_steps <- function(analysis_dir) {
-  data.frame(
+  steps <- data.frame(
     step = c(
       "manual_translons",
       "fst_pages",
@@ -231,13 +279,11 @@ pipeline_steps <- function(analysis_dir) {
       "score_semantics",
       "score_semantics_design",
       "rdg_graphs",
-      "denoised_tracks",
       "uorf_structure",
       "next_model",
       "branch_usage",
       "branch_coverage_qc",
       "grouped_branch_usage",
-      "denoising_comparison",
       "branch_allocation",
       "ouorf_cds_coupling",
       "downstream_tis_rescue",
@@ -305,13 +351,11 @@ pipeline_steps <- function(analysis_dir) {
         "dominant_state_score_semantics_comparison.R",
         "dominant_state_score_semantics_design_aware.R",
         "dominant_ribosome_decision_graphs.R",
-        "dominant_denoised_tracks.R",
         "dominant_uorf_structure_rules.R",
         "dominant_next_model_candidate_discovery.R",
         "dominant_rdg_branch_usage_model.R",
         "dominant_rdg_branch_coverage_qc.R",
         "dominant_rdg_grouped_branch_usage_model.R",
-        "dominant_denoising_comparison.R",
         "dominant_rdg_count_aware_branch_allocation.R",
         "dominant_ouorf_cds_coupling_analysis.R",
         "dominant_downstream_tis_rescue_audit.R",
@@ -359,24 +403,34 @@ pipeline_steps <- function(analysis_dir) {
     ),
     stringsAsFactors = FALSE
   )
+  optional <- pipeline_optional_steps(analysis_dir)
+  if (!length(optional)) return(steps)
+  order <- pipeline_insert_optional_steps(steps$step, optional)
+  extra <- data.frame(
+    step = vapply(optional, `[[`, character(1), "step"),
+    script = file.path(analysis_dir, "scripts",
+                       vapply(optional, `[[`, character(1), "script")),
+    stringsAsFactors = FALSE
+  )
+  steps <- rbind(steps, extra)
+  steps <- steps[match(order, steps$step), , drop = FALSE]
+  rownames(steps) <- NULL
+  steps
 }
 
 pipeline_step_outputs <- function(analysis_dir) {
   results_dir <- analysis_results_dir(analysis_dir, create = TRUE)
   p <- function(...) file.path(results_dir, ...)
+  optional <- pipeline_optional_steps(analysis_dir)
+  optional_outputs <- stats::setNames(
+    lapply(optional, function(spec) spec$outputs(p)),
+    vapply(optional, `[[`, character(1), "step")
+  )
+  c(optional_outputs, pipeline_core_step_outputs(analysis_dir, results_dir, p))
+}
+
+pipeline_core_step_outputs <- function(analysis_dir, results_dir, p) {
   list(
-    denoising_comparison = file.path(p("dominant_denoising_comparison"), c(
-      "gene_overlap_classes.csv", "contrast_library_membership.csv",
-      "paired_library_measurements.csv", "matched_assay_contrasts.csv",
-      "assay_comparison_summary.csv", "denoising_review_queue.csv",
-      "gene_assay_summary.csv", "run_metrics.csv",
-      "shared_region_library_measurements.csv", "shared_region_matched_contrasts.csv"
-    )),
-    denoised_tracks = c(
-      p("dominant_denoised_tracks", "track_manifest.csv"),
-      p("dominant_denoised_tracks", "translon_first_codon_base_measurements.csv"),
-      p("dominant_denoised_tracks", "manifest.qs")
-    ),
     # Generated manual files belong under results/; only the curated text
     # queue remains under analysis_dir/manual_translons.
     manual_translons = c(
@@ -1437,26 +1491,9 @@ pipeline_step_dependencies <- function(step_name, analysis_dir, runtime_inputs =
   metadata_file <- resolve_metadata_file()
   outputs <- pipeline_step_outputs(analysis_dir)
   canonical_isoform_file <- pipeline_canonical_isoform_file()
-  base <- switch(
+  optional <- pipeline_optional_step_spec(step_name, analysis_dir)
+  base <- if (!is.null(optional)) optional$dependencies(rp, metadata_file) else switch(
     step_name,
-    denoising_comparison = c(
-      metadata_file,
-      rp("dominant_denoised_tracks", "track_manifest.csv"),
-      rp("dominant_denoised_tracks", "manifest.qs"),
-      rp("dominant_denoised_tracks", "translon_first_codon_base_measurements.csv"),
-      rp("human_dominant_cell_states_clean_cds_gene_diagnostics.csv"),
-      rp("dominant_rdg_outputs", "rdg_feature_annotation.csv"),
-      rp("dominant_uorf_feature_expression.csv"),
-      rp("dominant_rdg_grouped_branch_usage", "dominant_rdg_grouped_branch_usage_contrast_table.csv")
-    ),
-    denoised_tracks = c(
-      rp("human_dominant_cell_states_clean_cds_gene_diagnostics.csv"),
-      rp("dominant_rdg_outputs", "rdg_feature_annotation.csv"),
-      file.path(path.expand(Sys.getenv("FRAMEWINNOW_SOURCE_DIR", "~/shared_workspace/Denoising")),
-        "priors/homo_sapiens/counts/frame_counts-Homo_sapiens.GRCh38.108_ensembl.fst"),
-      list.files(file.path(path.expand(Sys.getenv("FRAMEWINNOW_SOURCE_DIR", "~/shared_workspace/Denoising")),
-        "FrameWinnow", "R"), "[.]R$", full.names = TRUE)
-    ),
     manual_translons = c(
       p("manual_translons", "translons_to_be_added_to_manual.txt")
     ),
@@ -1866,7 +1903,17 @@ pipeline_step_dependencies <- function(step_name, analysis_dir, runtime_inputs =
   unique(base[!is.na(base) & nzchar(base)])
 }
 
-pipeline_scopes <- function() {
+pipeline_scopes <- function(analysis_dir = NULL) {
+  scopes <- pipeline_core_scopes()
+  if (is.null(analysis_dir)) {
+    analysis_dir <- tryCatch(find_analysis_dir(), error = function(e) NULL)
+  }
+  optional <- if (is.null(analysis_dir)) list() else pipeline_optional_steps(analysis_dir)
+  if (!length(optional)) return(scopes)
+  lapply(scopes, pipeline_insert_optional_steps, optional = optional)
+}
+
+pipeline_core_scopes <- function() {
   list(
     validate_manual = c("manual_translons"),
     core = c(
@@ -1893,13 +1940,11 @@ pipeline_scopes <- function() {
       "score_semantics",
       "score_semantics_design",
       "rdg_graphs",
-      "denoised_tracks",
       "uorf_structure",
       "next_model",
       "branch_usage",
       "branch_coverage_qc",
       "grouped_branch_usage",
-      "denoising_comparison",
       "branch_allocation",
       "ouorf_cds_coupling",
       "downstream_tis_rescue",
@@ -1965,13 +2010,11 @@ pipeline_scopes <- function() {
       "score_semantics",
       "score_semantics_design",
       "rdg_graphs",
-      "denoised_tracks",
       "uorf_structure",
       "next_model",
       "branch_usage",
       "branch_coverage_qc",
       "grouped_branch_usage",
-      "denoising_comparison",
       "branch_allocation",
       "ouorf_cds_coupling",
       "downstream_tis_rescue",
@@ -2029,13 +2072,11 @@ pipeline_scopes <- function() {
       "score_semantics",
       "score_semantics_design",
       "rdg_graphs",
-      "denoised_tracks",
       "uorf_structure",
       "next_model",
       "branch_usage",
       "branch_coverage_qc",
       "grouped_branch_usage",
-      "denoising_comparison",
       "branch_allocation",
       "ouorf_cds_coupling",
       "downstream_tis_rescue",
@@ -2215,7 +2256,7 @@ run_dominant_cell_state_pipeline <- function(scope = "all",
   write_pipeline_runtime_options(analysis_dir, rdg_plot_mode)
 
   all_steps <- pipeline_steps(analysis_dir)
-  scopes <- pipeline_scopes()
+  scopes <- pipeline_scopes(analysis_dir)
 
   if (is.null(steps)) {
     if (!scope %in% names(scopes)) {
@@ -2354,15 +2395,9 @@ run_dominant_cell_state_pipeline <- function(scope = "all",
         cache_version = cache_version,
         extra_source_files = pipeline_step_source_files(script_file, analysis_dir)
       )
-      if (isTRUE(cache_state$valid) && step_name %in% c("denoised_tracks", "denoising_comparison")) {
-        track_manifest <- qs2::qs_read(file.path(results_dir, "dominant_denoised_tracks", "manifest.qs"), nthreads = 1)
-        info <- file.info(track_manifest$files$path)
-        current <- data.frame(path = track_manifest$files$path, size = info$size,
-                              mtime = as.numeric(info$mtime))
-        if (!identical(current, track_manifest$files)) {
-          cache_state$valid <- FALSE
-          cache_state$reason <- "referenced denoising output changed or disappeared"
-        }
+      optional <- pipeline_optional_step_spec(step_name, analysis_dir)
+      if (isTRUE(cache_state$valid) && is.function(optional$cache_check)) {
+        cache_state <- optional$cache_check(results_dir, cache_state)
       }
       if (isTRUE(cache_state$valid)) {
         ended <- Sys.time()

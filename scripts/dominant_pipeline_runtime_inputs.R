@@ -29,9 +29,13 @@ pipeline_runtime_input_files <- function() {
 }
 
 pipeline_step_runtime_inputs <- function(step_name, runtime_inputs) {
-  coverage_consumers <- c("rdg_graphs", "denoised_tracks", "cds_frame_bumpiness_qc",
+  coverage_consumers <- c("rdg_graphs", "cds_frame_bumpiness_qc",
     "infected_off_frame_frame_risk", "infected_off_frame_hotspots",
     "infected_off_frame_frame_diagnostics", "downstream_tis_rescue")
+  if (exists("pipeline_optional_coverage_consumers", mode = "function")) {
+    coverage_consumers <- c(coverage_consumers, pipeline_optional_coverage_consumers(
+      get0("analysis_dir", ifnotfound = NULL)))
+  }
   if (step_name %in% coverage_consumers) {
     return(c(runtime_inputs$annotations, runtime_inputs$index,
              runtime_inputs$sample_info))
