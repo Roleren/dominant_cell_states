@@ -17,7 +17,7 @@ the inverse-variance weights.}
 \item{se_floor}{Lower bound applied to \code{se} after filtering (0 for none).}
 }
 \value{
-List with n, effect, se, lower, upper, z, p, tau2, i2,
+List with n, effect, se, lower, upper, z, p, tau2, i2, q_stat (Cochran's Q),
 direction_fraction and ci_excludes_zero.
 }
 \description{

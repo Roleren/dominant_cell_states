@@ -9,6 +9,7 @@ source(file.path(Sys.getenv("DOMINANT_CELL_STATES_DIR", "."), "scripts",
                  "dominant_script_common.R"), local = TRUE)
 
 analysis_dir <- find_analysis_dir()
+source(file.path(analysis_dir, "R", "meta.R"), local = TRUE)
 output_dir <- file.path(analysis_dir, "dominant_rdg_hierarchical_joint_allocation")
 figure_dir <- file.path(output_dir, "figures")
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
@@ -71,65 +72,9 @@ q_component <- function(q) {
   out
 }
 
+# DerSimonian-Laird pooling (R/meta.R); this script floors se at 1e-6.
 random_effects_summary <- function(effect, se, weight = NULL) {
-  effect <- safe_num(effect)
-  se <- safe_num(se)
-  if (is.null(weight)) weight <- rep(1, length(effect))
-  weight <- safe_num(weight)
-  keep <- is.finite(effect) & is.finite(se) & se > 0 &
-    is.finite(weight) & weight > 0
-  if (!any(keep)) {
-    return(data.table(
-      n = 0L,
-      effect = NA_real_,
-      se = NA_real_,
-      lower = NA_real_,
-      upper = NA_real_,
-      p = NA_real_,
-      tau2 = NA_real_,
-      i2 = NA_real_,
-      q_stat = NA_real_,
-      direction_fraction = NA_real_,
-      ci_excludes_zero = FALSE
-    ))
-  }
-  yi <- effect[keep]
-  sei <- pmax(se[keep], 1e-6)
-  wi_external <- weight[keep] / mean(weight[keep])
-  vi <- sei^2
-  wi <- wi_external / vi
-  fixed <- sum(wi * yi) / sum(wi)
-  q_stat <- sum(wi * (yi - fixed)^2)
-  df <- length(yi) - 1
-  c_val <- sum(wi) - sum(wi^2) / sum(wi)
-  tau2 <- if (df > 0 && c_val > 0) max(0, (q_stat - df) / c_val) else 0
-  wi_re <- wi_external / (vi + tau2)
-  mu <- sum(wi_re * yi) / sum(wi_re)
-  se_mu <- sqrt(1 / sum(wi_re))
-  lower <- mu - 1.96 * se_mu
-  upper <- mu + 1.96 * se_mu
-  z <- mu / se_mu
-  p <- 2 * pnorm(-abs(z))
-  sign_ref <- sign(mu)
-  direction_fraction <- if (sign_ref == 0) {
-    mean(yi == 0)
-  } else {
-    mean(sign(yi) == sign_ref)
-  }
-  i2 <- if (q_stat > 0 && df > 0) max(0, (q_stat - df) / q_stat) else 0
-  data.table(
-    n = length(yi),
-    effect = mu,
-    se = se_mu,
-    lower = lower,
-    upper = upper,
-    p = p,
-    tau2 = tau2,
-    i2 = i2,
-    q_stat = q_stat,
-    direction_fraction = direction_fraction,
-    ci_excludes_zero = isTRUE(lower > 0 | upper < 0)
-  )
+  dcs_random_effects(effect, se, weight, se_floor = 1e-6)
 }
 
 message("Hierarchical joint RDG allocation model:")
