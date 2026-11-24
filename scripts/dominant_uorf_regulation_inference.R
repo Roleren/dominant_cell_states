@@ -678,7 +678,7 @@ message("Translon source composition after deduplication: ",
 # dir; this project's own indexed coverage-page cache (see
 # dominant_cell_state_pack_fst_pages.R's documented page_source_dir) is one
 # level further, at "<that>_indexed".
-fst_index <- file.path(paste0(collection_dir_from_exp(df), "_indexed"), "coverage_index.fst")
+fst_index <- file.path(sub("(_indexed)?$", "_indexed", collection_dir_from_exp(df)), "coverage_index.fst")
 lib_sizes <- library_sizes_by_run(df)
 
 feature_dt <- rbindlist(lapply(seq_len(nrow(diagnostics)), function(i) {
