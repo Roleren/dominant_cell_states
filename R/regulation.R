@@ -402,3 +402,56 @@ dcs_arm_contrast <- function(est, se, arm, case = "case", level = 0.95) {
              mean_control = mean(est[b]), delta = delta, se = s,
              lower = delta - q * s, upper = delta + q * s, df = df)
 }
+
+# ---------------------------------------------------------------------------
+# Protocol multipliers and matched null sets
+# ---------------------------------------------------------------------------
+
+#' Protocol multiplier per feature, empirical-Bayes shrunk
+#'
+#' For a features x studies matrix of log profiles and a two-level study
+#' label (e.g. no drug vs cycloheximide), the raw multiplier is the
+#' difference of the two group means per feature; its sampling variance
+#' comes from the between-study spread inside each group. The shrunk
+#' multiplier is raw * tau2 / (tau2 + se^2), with tau2 the robust variance
+#' (MAD^2) of the raw multipliers above their median sampling variance, so a
+#' few very noisy features do not hide a shared signal.
+#' @param P Numeric matrix, features x studies.
+#' @param group Logical (TRUE = the level whose effect is estimated) per study.
+#' @return list(raw, se, shrunk, tau2).
+#' @export
+dcs_protocol_multiplier <- function(P, group) {
+  group <- as.logical(group)
+  stopifnot(ncol(P) == length(group), sum(group) >= 2, sum(!group) >= 2)
+  a <- P[, group, drop = FALSE]; b <- P[, !group, drop = FALSE]
+  ma <- rowMeans(a); mb <- rowMeans(b)
+  va <- rowSums((a - ma)^2) / (ncol(a) - 1); vb <- rowSums((b - mb)^2) / (ncol(b) - 1)
+  raw <- ma - mb
+  se2 <- va / ncol(a) + vb / ncol(b)
+  tau2 <- max(0, stats::mad(raw)^2 - stats::median(se2))
+  list(raw = raw, se = sqrt(se2), shrunk = raw * tau2 / (tau2 + se2), tau2 = tau2)
+}
+
+#' Matched random sets of features
+#'
+#' For each target, draws a non-target feature from the same stratum (e.g.
+#' a decile x decile bin of expression and leader reads); repeated `n_sets`
+#' times. Strata with no candidate fall back to all candidates.
+#' @param target Indices (or names) of the target features within `stratum`.
+#' @param stratum Stratum label per feature.
+#' @param candidate Logical per feature: allowed in matched sets.
+#' @param n_sets Number of sets.
+#' @param seed Random seed.
+#' @return Integer matrix, n_sets x length(target), of feature indices.
+#' @export
+dcs_matched_sets <- function(target, stratum, candidate, n_sets = 200L, seed = 1L) {
+  if (is.character(target)) target <- match(target, names(stratum))
+  set.seed(seed)
+  cand <- which(candidate)
+  by_s <- split(cand, stratum[cand])
+  sapply(target, function(t) {
+    pool <- by_s[[as.character(stratum[t])]]
+    if (!length(pool)) pool <- cand
+    pool[sample.int(length(pool), n_sets, replace = TRUE)]
+  })
+}

@@ -124,3 +124,22 @@ test_that("placebo band is always double, also below three contrasts", {
   expect_type(dcs_placebo_band(c(0.1, 0.2), c(0.01, 0.01)), "double")
   expect_type(dcs_placebo_band(rnorm(10), rep(0.01, 10)), "double")
 })
+
+test_that("protocol multiplier recovers a planted shift and shrinks noise", {
+  set.seed(9)
+  nf <- 2000; grp <- rep(c(TRUE, FALSE), c(6, 20))
+  m_true <- c(rnorm(200, 0, 0.5), rep(0, 1800))
+  P <- matrix(rnorm(nf * 26, 0, 0.3), nf, 26) + outer(m_true, grp)
+  m <- dcs_protocol_multiplier(P, grp)
+  expect_gt(cor(m$shrunk[1:200], m_true[1:200]), 0.8)
+  expect_lt(mean(abs(m$shrunk[201:2000])), mean(abs(m$raw[201:2000])))
+  expect_true(m$tau2 > 0)
+})
+
+test_that("matched sets draw from the target's stratum and exclude non-candidates", {
+  strat <- rep(c("a", "b", "c"), each = 10)
+  cand <- rep(TRUE, 30); cand[c(1, 11)] <- FALSE
+  s <- dcs_matched_sets(c(1, 11), strat, cand, n_sets = 50, seed = 2)
+  expect_equal(dim(s), c(50L, 2L))
+  expect_true(all(s[, 1] %in% 2:10)); expect_true(all(s[, 2] %in% 12:20))
+})
