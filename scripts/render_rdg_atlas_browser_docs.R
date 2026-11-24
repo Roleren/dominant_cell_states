@@ -23,26 +23,8 @@ if (!requireNamespace("htmltools", quietly = TRUE)) {
        call. = FALSE)
 }
 
-find_analysis_dir <- function(start = getwd()) {
-  here <- normalizePath(start, mustWork = TRUE)
-  repeat {
-    if (basename(here) == "dominant_cell_states" &&
-        file.exists(file.path(here, "md",
-                              "dominant_cell_state_scientific_note.md"))) {
-      return(here)
-    }
-    candidate <- file.path(here, "dominant_cell_states")
-    if (file.exists(file.path(candidate,
-                              "md",
-                              "dominant_cell_state_scientific_note.md"))) {
-      return(normalizePath(candidate, mustWork = TRUE))
-    }
-    parent <- dirname(here)
-    if (identical(parent, here)) break
-    here <- parent
-  }
-  stop("Could not find dominant_cell_states from: ", start, call. = FALSE)
-}
+source(file.path(Sys.getenv("DOMINANT_CELL_STATES_DIR", "."), "scripts",
+                 "dominant_script_common.R"), local = TRUE)
 
 analysis_dir <- find_analysis_dir()
 docs_dir <- file.path(

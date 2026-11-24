@@ -126,6 +126,24 @@ test_that("helper dependencies are scoped and followed transitively", {
   expect_setequal(pipeline_step_source_files(script, tmp), c(helper, nested))
 })
 
+test_that("package code sourced from R/ is tracked as a step dependency", {
+  source(file.path(dcs_project_root(), "scripts", "dominant_pipeline_cache.R"))
+  tmp <- tempfile()
+  dir.create(file.path(tmp, "scripts"), recursive = TRUE)
+  dir.create(file.path(tmp, "R"))
+  on.exit(unlink(tmp, recursive = TRUE))
+  script <- file.path(tmp, "scripts", "step.R")
+  common <- file.path(tmp, "scripts", "dominant_script_common.R")
+  engine <- file.path(tmp, "R", "ridge.R")
+  writeLines(c(
+    'source(file.path(Sys.getenv("DOMINANT_CELL_STATES_DIR", "."), "scripts", "dominant_script_common.R"), local = TRUE)',
+    'source(file.path(analysis_dir, "R", "ridge.R"), local = TRUE)'), script)
+  writeLines("1", common)
+  writeLines("1", engine)
+  expect_setequal(pipeline_step_source_files(script, tmp),
+                  normalizePath(c(common, engine)))
+})
+
 test_that("megafst index timestamps invalidate step and measurement caches", {
   source(file.path(dcs_project_root(), "scripts", "dominant_pipeline_cache.R"))
   source(file.path(dcs_project_root(), "scripts", "dominant_pipeline_runtime_inputs.R"))

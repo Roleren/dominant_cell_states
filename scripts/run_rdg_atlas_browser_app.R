@@ -1,26 +1,7 @@
 #!/usr/bin/env Rscript
 
-find_analysis_dir <- function(start = getwd()) {
-  here <- normalizePath(start, mustWork = TRUE)
-  repeat {
-    if (basename(here) == "dominant_cell_states" &&
-        file.exists(file.path(here, "DESCRIPTION")) &&
-        dir.exists(file.path(here, "inst", "shiny", "rdg_atlas_browser"))) {
-      return(here)
-    }
-    candidate <- file.path(here, "dominant_cell_states")
-    if (file.exists(file.path(candidate, "DESCRIPTION")) &&
-        dir.exists(file.path(candidate, "inst", "shiny", "rdg_atlas_browser"))) {
-      return(normalizePath(candidate, mustWork = TRUE))
-    }
-    parent <- dirname(here)
-    if (identical(parent, here)) {
-      stop("Could not find dominant_cell_states analysis root from: ",
-           start, call. = FALSE)
-    }
-    here <- parent
-  }
-}
+source(file.path(Sys.getenv("DOMINANT_CELL_STATES_DIR", "."), "scripts",
+                 "dominant_script_common.R"), local = TRUE)
 
 analysis_dir <- find_analysis_dir()
 for (helper in list.files(file.path(analysis_dir, "R"), pattern = "\\.R$",

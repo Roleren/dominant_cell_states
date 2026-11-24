@@ -289,7 +289,10 @@ pipeline_step_source_files <- function(script_file, analysis_dir) {
     if (!file.exists(path) || path %in% visited) return(invisible(NULL))
     visited <<- c(visited, path)
     for (reference in pipeline_direct_source_references(path)) {
-      visit(file.path(analysis_dir, "scripts", reference))
+      # Step scripts source helpers from scripts/ and package code from R/.
+      candidates <- file.path(analysis_dir, c("scripts", "R"), reference)
+      existing <- candidates[file.exists(candidates)]
+      visit(if (length(existing)) existing[[1]] else candidates[[1]])
     }
   }
   visit(script_file)

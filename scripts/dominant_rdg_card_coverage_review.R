@@ -32,25 +32,8 @@ find_repo_root <- function(start = getwd()) {
   stop("Could not find RiboCrypt repo root from: ", start, call. = FALSE)
 }
 
-find_analysis_dir <- function(start = getwd()) {
-  here <- normalizePath(start, mustWork = TRUE)
-  repeat {
-    if (basename(here) == "dominant_cell_states" &&
-        dir.exists(file.path(here, "scripts"))) {
-      return(here)
-    }
-    candidate <- file.path(here, "dominant_cell_states")
-    if (dir.exists(candidate) &&
-        dir.exists(file.path(candidate, "scripts"))) {
-      return(normalizePath(candidate, mustWork = TRUE))
-    }
-    parent <- dirname(here)
-    if (identical(parent, here)) break
-    here <- parent
-  }
-  stop("Could not find dominant_cell_states analysis directory from: ",
-       start, call. = FALSE)
-}
+source(file.path(Sys.getenv("DOMINANT_CELL_STATES_DIR", "."), "scripts",
+                 "dominant_script_common.R"), local = TRUE)
 
 repo_root <- find_repo_root()
 analysis_dir <- find_analysis_dir()
