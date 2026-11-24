@@ -119,3 +119,8 @@ test_that("fill pass keeps the requested carriers of a tag outside the held-out 
     expect_equal(sum(x$heldout), 5L)
   }
 })
+
+test_that("placebo band is always double, also below three contrasts", {
+  expect_type(dcs_placebo_band(c(0.1, 0.2), c(0.01, 0.01)), "double")
+  expect_type(dcs_placebo_band(rnorm(10), rep(0.01, 10)), "double")
+})

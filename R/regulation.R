@@ -292,12 +292,12 @@ dcs_placebo_band <- function(d, v, robust = TRUE, level = 0.95) {
   ok <- is.finite(d) & is.finite(v)
   d <- d[ok]; v <- v[ok]
   if (length(d) < 3) {
-    return(c(n = length(d), sd_obs = NA, sd_count = NA, sd_excess = NA,
-             band = NA, false_rate_count = NA))
+    return(c(n = as.numeric(length(d)), sd_obs = NA_real_, sd_count = NA_real_,
+             sd_excess = NA_real_, band = NA_real_, false_rate_count = NA_real_))
   }
   sd_obs <- if (robust) stats::mad(d) else stats::sd(d)
   var_c <- mean(v)
-  c(n = length(d), sd_obs = sd_obs, sd_count = sqrt(var_c),
+  c(n = as.numeric(length(d)), sd_obs = sd_obs, sd_count = sqrt(var_c),
     sd_excess = sqrt(max(0, sd_obs^2 - var_c)),
     band = unname(stats::quantile(abs(d - stats::median(d)), level)),
     false_rate_count = mean(abs(d - stats::median(d)) / sqrt(v) > 1.96))
