@@ -9,6 +9,7 @@ source(file.path(Sys.getenv("DOMINANT_CELL_STATES_DIR", "."), "scripts",
                  "dominant_script_common.R"), local = TRUE)
 
 analysis_dir <- find_analysis_dir()
+source(file.path(analysis_dir, "R", "ridge.R"), local = TRUE)
 output_dir <- file.path(analysis_dir, "dominant_rdg_graph_geometry_model")
 figure_dir <- file.path(output_dir, "figures")
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
@@ -116,45 +117,17 @@ fit_blocked_direct_model <- function(model_dt, formula, label,
   x_all <- Matrix::sparse.model.matrix(formula, data = model_dt)
   y_all <- safe_num(model_dt$heldout_log2fc)
   blocks <- sort(unique(as.character(model_dt[[block_col]])))
-  fold_id <- match(as.character(model_dt[[block_col]]), blocks)
 
   set.seed(2)
-  cvfit <- glmnet::cv.glmnet(
-    x_all,
-    y_all,
-    family = "gaussian",
-    alpha = 0,
-    foldid = fold_id,
-    standardize = TRUE,
-    intercept = TRUE,
-    nlambda = 80
-  )
+  ridge <- dcs_blocked_ridge(x_all, y_all, model_dt[[block_col]],
+                             nlambda = 80, min_train = 100)
+  cvfit <- ridge
 
   predict_for_lambda <- function(lambda_value) {
-    pred <- rep(NA_real_, nrow(model_dt))
-    train_rows <- rep(NA_integer_, nrow(model_dt))
-    for (block_id in blocks) {
-      test_idx <- which(as.character(model_dt[[block_col]]) == block_id)
-      train_idx <- which(as.character(model_dt[[block_col]]) != block_id)
-      if (!length(test_idx) || length(train_idx) < 100) next
-      fit <- glmnet::glmnet(
-        x_all[train_idx, , drop = FALSE],
-        y_all[train_idx],
-        family = "gaussian",
-        alpha = 0,
-        lambda = lambda_value,
-        standardize = TRUE,
-        intercept = TRUE
-      )
-      pred[test_idx] <- as.numeric(stats::predict(
-        fit,
-        newx = x_all[test_idx, , drop = FALSE],
-        s = lambda_value
-      ))
-      train_rows[test_idx] <- length(train_idx)
-    }
+    fit <- ridge$predict(lambda_value)
+    pred <- fit$prediction
     pred[!is.finite(pred)] <- mean_safe(y_all)
-    data.table(predicted_log2fc = pred, train_rows = train_rows)
+    data.table(predicted_log2fc = pred, train_rows = fit$train_rows)
   }
 
   lambdas <- data.table(
@@ -186,16 +159,7 @@ fit_blocked_direct_model <- function(model_dt, formula, label,
   chosen <- lambda_selection[1]
   pred <- pred_list[[match(chosen$lambda_value, lambdas$lambda_value)]]
 
-  final_fit <- glmnet::glmnet(
-    x_all,
-    y_all,
-    family = "gaussian",
-    alpha = 0,
-    lambda = chosen$lambda_value,
-    standardize = TRUE,
-    intercept = TRUE
-  )
-  coef_mat <- as.matrix(stats::coef(final_fit, s = chosen$lambda_value))
+  coef_mat <- ridge$coef(chosen$lambda_value)
   coef_dt <- data.table(
     model = label,
     feature = rownames(coef_mat),

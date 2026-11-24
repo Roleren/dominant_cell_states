@@ -9,6 +9,7 @@ source(file.path(Sys.getenv("DOMINANT_CELL_STATES_DIR", "."), "scripts",
                  "dominant_script_common.R"), local = TRUE)
 
 analysis_dir <- find_analysis_dir()
+source(file.path(analysis_dir, "R", "ridge.R"), local = TRUE)
 output_dir <- file.path(analysis_dir,
                         "dominant_rdg_hierarchical_branch_covariates")
 figure_dir <- file.path(output_dir, "figures")
@@ -256,45 +257,17 @@ fit_blocked_residual_model <- function(model_dt, formula, label) {
   x_all <- Matrix::sparse.model.matrix(formula, data = model_dt)
   y_all <- model_dt$residual_target
   study_groups <- sort(unique(as.character(model_dt$heldout_study)))
-  fold_id <- match(as.character(model_dt$heldout_study), study_groups)
 
   set.seed(1)
-  cvfit <- glmnet::cv.glmnet(
-    x_all,
-    y_all,
-    family = "gaussian",
-    alpha = 0,
-    foldid = fold_id,
-    standardize = TRUE,
-    intercept = TRUE,
-    nlambda = 80
-  )
+  ridge <- dcs_blocked_ridge(x_all, y_all, model_dt$heldout_study,
+                             nlambda = 80, min_train = 100)
+  cvfit <- ridge
 
   predict_for_lambda <- function(lambda_value) {
-    offset <- rep(NA_real_, nrow(model_dt))
-    train_rows <- rep(NA_integer_, nrow(model_dt))
-    for (study_id in study_groups) {
-      test_idx <- which(as.character(model_dt$heldout_study) == study_id)
-      train_idx <- which(as.character(model_dt$heldout_study) != study_id)
-      if (length(test_idx) == 0 || length(train_idx) < 100) next
-      fit <- glmnet::glmnet(
-        x_all[train_idx, , drop = FALSE],
-        y_all[train_idx],
-        family = "gaussian",
-        alpha = 0,
-        lambda = lambda_value,
-        standardize = TRUE,
-        intercept = TRUE
-      )
-      offset[test_idx] <- as.numeric(stats::predict(
-        fit,
-        newx = x_all[test_idx, , drop = FALSE],
-        s = lambda_value
-      ))
-      train_rows[test_idx] <- length(train_idx)
-    }
+    fit <- ridge$predict(lambda_value)
+    offset <- fit$prediction
     offset[!is.finite(offset)] <- 0
-    data.table(residual_offset_log2fc = offset, train_rows = train_rows)
+    data.table(residual_offset_log2fc = offset, train_rows = fit$train_rows)
   }
 
   lambdas <- data.table(
@@ -328,16 +301,7 @@ fit_blocked_residual_model <- function(model_dt, formula, label) {
   chosen <- lambda_selection[1]
   pred <- pred_list[[match(chosen$lambda_value, lambdas$lambda_value)]]
 
-  final_fit <- glmnet::glmnet(
-    x_all,
-    y_all,
-    family = "gaussian",
-    alpha = 0,
-    lambda = chosen$lambda_value,
-    standardize = TRUE,
-    intercept = TRUE
-  )
-  coef_mat <- as.matrix(stats::coef(final_fit, s = chosen$lambda_value))
+  coef_mat <- ridge$coef(chosen$lambda_value)
   coef_dt <- data.table(
     model = label,
     feature = rownames(coef_mat),
