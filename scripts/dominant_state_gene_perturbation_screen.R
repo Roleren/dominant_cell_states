@@ -35,6 +35,7 @@ gene_state_output <- result_file("dominant_state_gene_perturbation_screen_gene_s
 top_hits_output <- result_file("dominant_state_gene_perturbation_screen_top_hits.csv")
 
 source(file.path(analysis_dir, "scripts", "dominant_state_module_definitions.R"))
+source(file.path(analysis_dir, "R", "contrasts.R"), local = TRUE)
 source(file.path(analysis_dir, "scripts", "dominant_column_dictionary.R"))
 
 state_file <- result_file("human_dominant_cell_states_clean_cds_gene_expression.csv")
@@ -107,18 +108,16 @@ dt <- dt[!(CELL_LINE %chin% exclude_cell_lines)]
 # (scrambled/non-targeting/mock/empty-vector) within the same study+cell
 # line; fall back to a generic WT/control baseline only if no tighter
 # control exists in that group.
-tight_control_pattern <- "^(scram|scr|scrambled|ntc|non.?targeting|mock|ev|empty.?vector)$"
-loose_control_pattern <- "^(wt|control|ctrl|parental)$"
+# (dcs_control_tiers() in R/contrasts.R holds the tight/loose patterns.)
 perturb_pattern <- "kd|ko|knockdown|knockout|shrna|sirna|crispr"
 
 dt[, cond_lower := tolower(trimws(CONDITION))]
-dt[, is_tight_control := grepl(tight_control_pattern, cond_lower)]
-dt[, is_loose_control := grepl(loose_control_pattern, cond_lower)]
+tiers <- dcs_control_tiers(dt$CONDITION, list(dt$study, dt$CELL_LINE))
+dt[, is_tight_control := tiers$is_tight_control]
+dt[, is_loose_control := tiers$is_loose_control]
 dt[, is_perturb := !is.na(GENE) & nzchar(GENE) & grepl(perturb_pattern, cond_lower)]
-
-group_has_tight <- dt[, .(has_tight = any(is_tight_control)), by = .(study, CELL_LINE)]
-dt <- merge(dt, group_has_tight, by = c("study", "CELL_LINE"), all.x = TRUE, sort = FALSE)
-dt[, is_control := is_tight_control | (is_loose_control & !has_tight)]
+dt[, has_tight := tiers$group_has_tight]
+dt[, is_control := tiers$is_control]
 
 pert <- dt[is_perturb == TRUE]
 ctrl <- dt[is_control == TRUE]

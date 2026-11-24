@@ -288,10 +288,7 @@ adapter_file <- file.path(output_dir,
                           "dominant_rdg_grouped_branch_usage_adapter.csv")
 fwrite(group_features, adapter_file)
 
-make_stratum_id <- function(dt, fields) {
-  fields <- intersect(fields, names(dt))
-  do.call(paste, c(dt[, ..fields], sep = " | "))
-}
+make_stratum_id <- function(dt, fields) dcs_stratum_id(dt, fields)
 
 build_contrasts_for_scope <- function(group_features, match_scope,
                                       stratum_fields) {

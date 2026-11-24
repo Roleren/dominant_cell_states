@@ -1111,7 +1111,7 @@ if (nrow(feature_expression) > 0 && file.exists(metadata_file)) {
   setorder(condition_design_family_audit, design_family,
            -n_samples, CONDITION)
   fwrite(condition_design_family_audit, condition_design_family_output)
-  m[, stratum_id := do.call(paste, c(.SD, sep = " | ")), .SDcols = stratum_fields]
+  m[, stratum_id := dcs_stratum_id(m, stratum_fields)]
 
   structure_key <- structure[, .(
     gene_symbol, tx_id,

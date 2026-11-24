@@ -325,8 +325,7 @@ if (exists("dominant_classify_perturbation_class", mode = "function")) {
   dt[, perturbation_class :=
        dominant_classify_perturbation_class(CONDITION_clean, design_family)]
 }
-dt[, stratum_id := do.call(paste, c(.SD, sep = " | ")),
-   .SDcols = paste0(stratum_fields, "_clean")]
+dt[, stratum_id := dcs_stratum_id(dt, paste0(stratum_fields, "_clean"))]
 
 contrasts <- rbindlist(lapply(unique(dt$stratum_id), function(stratum) {
   sdt <- dt[stratum_id == stratum & !is.na(CONDITION_clean)]
