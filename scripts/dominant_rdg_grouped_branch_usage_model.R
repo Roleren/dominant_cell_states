@@ -351,10 +351,19 @@ build_contrasts_for_scope <- function(group_features, match_scope,
   dt <- dt[replicate_gate_n2 == TRUE]
   if (nrow(dt) == 0) return(data.table())
 
-  case_feature <- dt[
-    is_control_condition != TRUE,
+  # uniqueN() inside j disables data.table's grouped fast path (GForce);
+  # distinct group counts are computed once from unique rows and joined back.
+  case_by <- c(
+    "stratum_id",
+    "case_condition" = "CONDITION",
+    "perturbation_class",
+    "design_family",
+    "feature_key"
+  )
+  case_rows <- dt[is_control_condition != TRUE]
+  case_feature <- case_rows[
+    ,
     .(
-      n_case_groups = uniqueN(group_id),
       n_case_runs_merged = sum(n_runs_merged, na.rm = TRUE),
       case_branch_total_counts = sum(branch_total_raw_counts, na.rm = TRUE),
       case_sum_raw_counts = sum(raw_counts, na.rm = TRUE),
@@ -369,26 +378,42 @@ build_contrasts_for_scope <- function(group_features, match_scope,
       Sex = Sex[1],
       TIMEPOINT = TIMEPOINT[1]
     ),
-    by = c(
-      "stratum_id",
-      "case_condition" = "CONDITION",
-      "perturbation_class",
-      "design_family",
-      "feature_key"
-    )
+    by = case_by
   ]
-  control_feature <- dt[
-    is_control_condition == TRUE,
+  count_distinct_groups <- function(rows, by) {
+    src <- unname(by)
+    out_names <- names(by)
+    if (is.null(out_names)) out_names <- src
+    out_names[!nzchar(out_names)] <- src[!nzchar(out_names)]
+    counts <- unique(rows[, c(src, "group_id"), with = FALSE])[, .N, by = src]
+    setnames(counts, src, out_names)
+    counts
+  }
+  case_counts <- count_distinct_groups(case_rows, case_by)
+  case_feature[case_counts, n_case_groups := i.N, on = names(case_counts)[seq_along(case_by)]]
+  setcolorder(case_feature, c(names(case_feature)[seq_along(case_by)], "n_case_groups"))
+
+  control_rows <- dt[is_control_condition == TRUE]
+  control_by <- c("stratum_id", "feature_key")
+  control_feature <- control_rows[
+    ,
     .(
-      n_control_groups = uniqueN(group_id),
       n_control_runs_merged = sum(n_runs_merged, na.rm = TRUE),
       control_branch_total_counts =
         sum(branch_total_raw_counts, na.rm = TRUE),
-      control_sum_raw_counts = sum(raw_counts, na.rm = TRUE),
-      control_conditions = paste(sort(unique(CONDITION)), collapse = ";")
+      control_sum_raw_counts = sum(raw_counts, na.rm = TRUE)
     ),
-    by = c("stratum_id", "feature_key")
+    by = control_by
   ]
+  control_condition_sets <- unique(
+    control_rows[, c(control_by, "CONDITION"), with = FALSE]
+  )[, .(control_conditions = paste(sort(unique(CONDITION)), collapse = ";")),
+    by = control_by]
+  control_counts <- count_distinct_groups(control_rows, control_by)
+  control_feature[control_counts, n_control_groups := i.N, on = control_by]
+  control_feature[control_condition_sets,
+                  control_conditions := i.control_conditions, on = control_by]
+  setcolorder(control_feature, c(control_by, "n_control_groups"))
 
   if (nrow(case_feature) == 0 || nrow(control_feature) == 0) {
     return(data.table())
