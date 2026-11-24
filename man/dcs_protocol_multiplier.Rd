@@ -19,6 +19,7 @@ For a features x studies matrix of log profiles and a two-level study
 label (e.g. no drug vs cycloheximide), the raw multiplier is the
 difference of the two group means per feature; its sampling variance
 comes from the between-study spread inside each group. The shrunk
-multiplier is raw * tau2 / (tau2 + se^2), with tau2 the variance of the
-raw multipliers above their mean sampling variance.
+multiplier is raw * tau2 / (tau2 + se^2), with tau2 the robust variance
+(MAD^2) of the raw multipliers above their median sampling variance, so a
+few very noisy features do not hide a shared signal.
 }

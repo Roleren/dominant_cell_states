@@ -10,6 +10,7 @@ dcs_draw_heldout_studies(
   tags = NULL,
   min_carriers = integer(),
   prefer = NULL,
+  keep_free = integer(),
   exclude = character(),
   fraction = 0.2,
   seed = 1L
@@ -29,6 +30,10 @@ eligible carriers for which one held-out study is guaranteed.}
 \item{prefer}{Optional logical vector (per study), preferred carriers for
 the guarantee pass (e.g. replicated, controlled designs).}
 
+\item{keep_free}{Named integer vector: tag -> carriers that must stay
+outside the held-out set after the fill pass (e.g. 1 to keep one study
+of a class for development).}
+
 \item{exclude}{Studies that may not be drawn (e.g. already analysed
 development data).}
 
@@ -46,5 +51,7 @@ eligible studies and none of them is held out yet, one carrier is drawn,
 from the \code{prefer}-red carriers when there are any. (2) Fill: in every
 stratum, studies are added at random until the stratum holds
 \code{fraction} of its studies (stochastic rounding of the remainder), counting
-the studies already held out by the guarantee pass.
+the studies already held out by the guarantee pass. A fill draw is skipped
+when it would leave fewer than \code{keep_free[tag]} carriers of a tag outside
+the held-out set (excluded studies count as outside).
 }
