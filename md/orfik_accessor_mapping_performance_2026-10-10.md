@@ -28,7 +28,7 @@ is retained under `debug_build_audit/`, not used for speedup claims.
 Run from the project root:
 
 ```bash
-env -u LC_ALL R --vanilla -q -e 'source("scripts/benchmark_orfik_mapping_source.R")'
+env -u LC_ALL R --vanilla -q -e 'source("scripts/benchmarks/benchmark_orfik_mapping_source.R")'
 ```
 
 The runner loads local ORFik and RiboCrypt, checks exact outputs including

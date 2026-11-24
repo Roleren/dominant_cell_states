@@ -88,7 +88,7 @@ isolated cache. Existing raw coverage caches remain available. These are cold
 Every unchanged-input measurement is checked against the production per-gene
 result. Range and index changes are simulated in memory; production annotations,
 coverage, and curated inputs are untouched. The executable benchmark is
-`scripts/benchmark_dominant_incremental_measurements.R`; exact timings are in
+`scripts/benchmarks/benchmark_dominant_incremental_measurements.R`; exact timings are in
 `incremental_gene_benchmark.csv` under the artifact directory.
 
 A cold discovered-manual-candidate activity pass took 2,190.776 seconds on this
@@ -226,7 +226,7 @@ Run the normal producer first, then:
 
 ```bash
 RIBOCRYPT_REPO=/home/rstudio/livemount/forks/RiboCrypt \
-env -u LC_ALL R --vanilla -q -f scripts/benchmark_dominant_incremental_measurements.R
+env -u LC_ALL R --vanilla -q -f scripts/benchmarks/benchmark_dominant_incremental_measurements.R
 ```
 
 `force = TRUE` reruns a pipeline step while retaining valid measurement caches.

@@ -15,7 +15,7 @@ if (!file.exists(file)) {
 }
 old <- qs2::qs_read(file)
 for (i in seq_along(old)) environment(old[[i]]) <- ns
-source("scripts/orfik_mapping_benchmark_baseline.R")
+source("scripts/benchmarks/orfik_mapping_benchmark_baseline.R")
 original_native <- load_original_mapping_native(out)
 old$pmapToTranscriptsCPP <- original_native$to
 old$pmapFromTranscriptsCPP <- original_native$from
@@ -25,7 +25,7 @@ b$strandBool <- ORFik::strandBool
 environment(b$strandBool) <- b
 environment(old$pmapToTranscriptF) <- environment(old$pmapFromTranscriptF) <- b
 if (Sys.getenv("ORFIK_MAPPING_SKIP_COMPILE") != "1")
-  Rcpp::sourceCpp("scripts/benchmark_orfik_mapping_candidate.cpp", cacheDir = file.path(out, "rcpp"))
+  Rcpp::sourceCpp("scripts/benchmarks/benchmark_orfik_mapping_candidate.cpp", cacheDir = file.path(out, "rcpp"))
 
 fast_groupings <- function(grl) {
   ends <- grl@partitioning@end

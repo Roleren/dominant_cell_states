@@ -64,3 +64,18 @@ test_that("sourcing the runner from Rscript does not launch its CLI", {
   expect_true(any(grepl('SOURCE_ONLY_OK',result,fixed=TRUE)))
   expect_false(any(grepl('Dominant-cell-state pipeline',result,fixed=TRUE)))
 })
+
+test_that("no pipeline step runs or sources the one-off benchmark scripts", {
+  root <- dcs_project_root()
+  env <- new.env(parent = globalenv())
+  dcs_load_pipeline(root = root, envir = env)
+  sys.source(file.path(root, "scripts", "dominant_pipeline_cache.R"), envir = env)
+  steps <- env$pipeline_steps(root)
+  bench <- basename(list.files(file.path(root, "scripts", "benchmarks")))
+  expect_true(length(bench) > 0)
+  expect_false(any(basename(steps$script) %in% bench))
+  present <- steps$script[file.exists(steps$script)]
+  sourced <- unlist(lapply(present, env$pipeline_step_source_files, analysis_dir = root))
+  expect_false(any(grepl("/benchmarks/", sourced, fixed = TRUE)))
+  expect_false(any(basename(sourced) %in% bench))
+})

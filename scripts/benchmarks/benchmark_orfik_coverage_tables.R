@@ -1,6 +1,6 @@
 # Coverage-table stress cases, independent of the external megafst timings.
 Sys.setenv(ORFIK_BENCHMARK_DEFINITIONS_ONLY = "1")
-source("scripts/benchmark_orfik_hotpaths.R")
+source("scripts/benchmarks/benchmark_orfik_hotpaths.R")
 out <- file.path(out, "coverage_tables")
 dir.create(out, recursive = TRUE, showWarnings = FALSE)
 set.seed(421L)

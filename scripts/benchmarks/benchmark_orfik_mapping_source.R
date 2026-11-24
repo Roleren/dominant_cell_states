@@ -1,5 +1,5 @@
 Sys.setenv(ORFIK_MAPPING_DEFINITIONS_ONLY = "1", ORFIK_MAPPING_BASELINE_CACHE = "rcpp-final")
-source("scripts/benchmark_orfik_accessors_mapping.R")
+source("scripts/benchmarks/benchmark_orfik_accessors_mapping.R")
 out <- file.path(out, "source_verification")
 dir.create(out, recursive = TRUE, showWarnings = FALSE)
 for (n in c(1L, 100L, 2000L)) {

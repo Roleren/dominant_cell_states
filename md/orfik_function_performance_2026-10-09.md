@@ -195,15 +195,15 @@ The existing artifact directory contains the original pre-edit function
 snapshot. To rerun the final comparison from this repository:
 
 ```bash
-env -u LC_ALL R --vanilla -q -e 'source("scripts/benchmark_orfik_source_verification.R")'
-env -u LC_ALL R --vanilla -q -e 'source("scripts/validate_orfik_hotpath_candidates.R")'
-env -u LC_ALL R --vanilla -q -e 'source("scripts/audit_orfik_fst_reads.R")'
-env -u LC_ALL R --vanilla -q -e 'source("scripts/profile_orfik_consumers.R")'
+env -u LC_ALL R --vanilla -q -e 'source("scripts/benchmarks/benchmark_orfik_source_verification.R")'
+env -u LC_ALL R --vanilla -q -e 'source("scripts/benchmarks/validate_orfik_hotpath_candidates.R")'
+env -u LC_ALL R --vanilla -q -e 'source("scripts/benchmarks/audit_orfik_fst_reads.R")'
+env -u LC_ALL R --vanilla -q -e 'source("scripts/benchmarks/profile_orfik_consumers.R")'
 ```
 
 For a new before/after experiment, set `ORFIK_BENCHMARK_CAPTURE_BASELINE=1`
 while the checkout is still unmodified, then run
-`scripts/benchmark_orfik_hotpaths.R`. The scripts refuse to silently capture an
+`scripts/benchmarks/benchmark_orfik_hotpaths.R`. The scripts refuse to silently capture an
 edited package as a missing baseline. `ORFIK_BENCHMARK_DIR` selects an isolated
 artifact directory. Keep the original `baseline_functions.qs` when comparing
 subsequent edits. Real-input runs require the project's existing transcript

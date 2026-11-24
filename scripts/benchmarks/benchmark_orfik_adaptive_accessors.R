@@ -1,5 +1,5 @@
 Sys.setenv(ORFIK_MAPPING_DEFINITIONS_ONLY = "1")
-source("scripts/benchmark_orfik_accessors_mapping.R")
+source("scripts/benchmarks/benchmark_orfik_accessors_mapping.R")
 out <- file.path(out, "adaptive_accessors")
 dir.create(out, recursive = TRUE, showWarnings = FALSE)
 make_adaptive <- function(field) {

@@ -1,6 +1,6 @@
 # Screen the other coverage/mapping calls used by RiboCrypt and this pipeline.
 Sys.setenv(ORFIK_BENCHMARK_DEFINITIONS_ONLY = "1")
-source("scripts/benchmark_orfik_hotpaths.R")
+source("scripts/benchmarks/benchmark_orfik_hotpaths.R")
 records <- lapply(c("ATF4", "FMR1", "BOD1L1"), function(gene) {
   x <- qs2::qs_read(list.files(".coverage_cache", pattern = paste0("^", gene, "__.*\\.qs$"), full.names = TRUE)[1])
   s <- x$signature

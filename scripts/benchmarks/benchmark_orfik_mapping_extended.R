@@ -1,5 +1,5 @@
 Sys.setenv(ORFIK_MAPPING_DEFINITIONS_ONLY = "1")
-source("scripts/benchmark_orfik_accessors_mapping.R")
+source("scripts/benchmarks/benchmark_orfik_accessors_mapping.R")
 out <- file.path(out, "extended")
 dir.create(out, recursive = TRUE, showWarnings = FALSE)
 # Large annotation accessor inputs, with both short and long Rle runs.

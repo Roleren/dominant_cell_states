@@ -7,7 +7,7 @@ stopifnot(file.exists(file.path(base_dir, "baseline_functions.qs")))
 file.copy(file.path(base_dir, "baseline_functions.qs"),
           file.path(final_dir, "baseline_functions.qs"), overwrite = TRUE)
 Sys.setenv(ORFIK_BENCHMARK_DEFINITIONS_ONLY = "1", ORFIK_BENCHMARK_DIR = final_dir)
-source("scripts/benchmark_orfik_hotpaths.R")
+source("scripts/benchmarks/benchmark_orfik_hotpaths.R")
 for (gene in c("ATF4", "FMR1", "BOD1L1")) {
   x <- qs2::qs_read(list.files(".coverage_cache", pattern = paste0("^", gene, "__.*\\.qs$"), full.names = TRUE)[1])
   s <- x$signature

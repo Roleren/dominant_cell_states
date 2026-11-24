@@ -1,5 +1,5 @@
 Sys.setenv(ORFIK_MAPPING_DEFINITIONS_ONLY = "1")
-source("scripts/benchmark_orfik_accessors_mapping.R")
+source("scripts/benchmarks/benchmark_orfik_accessors_mapping.R")
 set.seed(510L)
 checks <- 0L
 for (direction in c("+", "-")) for (iteration in seq_len(100L)) {

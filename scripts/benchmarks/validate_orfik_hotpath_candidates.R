@@ -1,5 +1,5 @@
 Sys.setenv(ORFIK_BENCHMARK_DEFINITIONS_ONLY = "1")
-source("scripts/benchmark_orfik_hotpaths.R")
+source("scripts/benchmarks/benchmark_orfik_hotpaths.R")
 root <- tempfile("fst-regression-")
 dir.create(root)
 idx <- rbindlist(lapply(c("1", "2"), function(chr) {

@@ -1,5 +1,5 @@
 Sys.setenv(ORFIK_BENCHMARK_DEFINITIONS_ONLY = "1")
-source("scripts/benchmark_orfik_hotpaths.R")
+source("scripts/benchmarks/benchmark_orfik_hotpaths.R")
 answer <- list()
 for (gene in c("ATF4", "FMR1", "BOD1L1")) {
   x <- qs2::qs_read(list.files(".coverage_cache", pattern = paste0("^", gene, "__.*\\.qs$"), full.names = TRUE)[1])
