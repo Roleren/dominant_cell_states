@@ -74,3 +74,37 @@ test_that("auto engine keeps glmnet for wide designs", {
                                      engine = "auto",
                                      max_fast_features = 5)$engine, "glmnet")
 })
+
+test_that("the lambda grid widens until the CV optimum is interior", {
+  set.seed(4)
+  n <- 300
+  x <- matrix(rnorm(n * 60), n)
+  y <- drop(x[, 1:3] %*% c(0.3, 0.2, 0.1)) + rnorm(n)
+  blocks <- rep(seq_len(10), length.out = n)
+  fixed <- dcs_blocked_ridge(x, y, blocks, nlambda = 30, min_train = 10,
+                             engine = "fast", extend_grid = FALSE,
+                             lambda_min_ratio = 0.9)
+  expect_identical(fixed$lambda.min, min(fixed$lambda))
+  expect_false(fixed$lambda_min_interior)
+  wide <- dcs_blocked_ridge(x, y, blocks, nlambda = 30, min_train = 10,
+                            engine = "fast", lambda_min_ratio = 0.9)
+  expect_equal(wide$lambda_min_ratio, 9e-5)
+  expect_true(wide$lambda_min_interior)
+  expect_gt(wide$lambda.min, min(wide$lambda))
+  skip_if_not_installed("glmnet")
+  slow <- dcs_blocked_ridge(x, y, blocks, nlambda = 30, min_train = 10,
+                            engine = "glmnet", lambda_min_ratio = 0.9)
+  expect_equal(slow$lambda_min_ratio, wide$lambda_min_ratio)
+  expect_equal(slow$lambda.min, wide$lambda.min, tolerance = 1e-10)
+})
+
+test_that("a near-unpenalised optimum stops at the extension limit", {
+  set.seed(21)
+  n <- 2000
+  x <- matrix(rnorm(n * 8), n)
+  y <- drop(x %*% c(2, -1, 1, 0.5, 0, 0, 0, 0)) + rnorm(n, sd = 0.1)
+  fit <- dcs_blocked_ridge(x, y, rep(seq_len(20), length.out = n),
+                           nlambda = 30, engine = "fast", lambda_min_ratio = 0.1)
+  expect_false(fit$lambda_min_interior)
+  expect_lt(fit$lambda_min_ratio / 100, 1e-10)
+})

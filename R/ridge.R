@@ -216,19 +216,23 @@ dcs_ridge_fit <- function(x, y, lambda, prep = NULL) {
 #' @param min_train Folds with fewer training rows get `NA` from
 #'   `fold_prediction()` (the scripts' historical `length(train_idx) < 100`
 #'   rule); the CV curve itself uses every fold, as cv.glmnet does.
+#' @param lambda_min_ratio Smallest lambda as a fraction of lambda_max
+#'   (NULL: glmnet's default).
 #' @return List with `lambda`, `cvm`, `cvsd`, `lambda.min`, `lambda.1se`,
 #'   `fold_prediction(lambda_values)` (held-out predictions with an exact
 #'   refit per fold, as `glmnet(lambda = s)` per fold) and `fit(lambda_values)`
 #'   (full-data coefficients).
 #' @export
-dcs_cv_ridge <- function(x, y, foldid, nlambda = 100L, min_train = 0L) {
+dcs_cv_ridge <- function(x, y, foldid, nlambda = 100L, min_train = 0L,
+                         lambda_min_ratio = NULL) {
   restore <- .dcs_single_thread_blas()
   on.exit(restore(), add = TRUE)
   prep <- dcs_ridge_prepare(x, y)
   foldid <- as.integer(foldid)
   nfolds <- max(foldid)
   full <- dcs_ridge_train(prep, seq_len(prep$n))
-  full_path <- dcs_ridge_path(full, nlambda = nlambda)
+  full_path <- dcs_ridge_path(full, nlambda = nlambda,
+                             lambda_min_ratio = lambda_min_ratio)
   lambda <- full_path$lambda
   folds <- lapply(seq_len(nfolds), function(k) {
     test <- which(foldid == k)
@@ -240,7 +244,8 @@ dcs_cv_ridge <- function(x, y, foldid, nlambda = 100L, min_train = 0L) {
   for (k in seq_len(nfolds)) {
     f <- folds[[k]]
     if (!length(f$test)) next
-    path <- dcs_ridge_path(f$tr, nlambda = nlambda)
+    path <- dcs_ridge_path(f$tr, nlambda = nlambda,
+                           lambda_min_ratio = lambda_min_ratio)
     pred_path <- dcs_ridge_predict_rows(prep, f$tr, path$beta_std, f$test)
     ip <- .dcs_lambda_interp(path$lambda, lambda)
     predmat[f$test, ] <- sweep(pred_path[, ip$left, drop = FALSE], 2L,
@@ -299,14 +304,23 @@ dcs_cv_ridge <- function(x, y, foldid, nlambda = 100L, min_train = 0L) {
 #' @param blocks Block label per row; one fold per sorted unique label.
 #' @param nlambda Lambda path length.
 #' @param min_train Blocks with fewer training rows are not predicted.
+#' @param lambda_min_ratio Smallest lambda as a fraction of lambda_max
+#'   (default as glmnet: 1e-4, or 0.01 when n < p).
+#' @param extend_grid When the CV optimum is the smallest lambda of the path,
+#'   divide `lambda_min_ratio` by 100 and refit until the optimum is interior
+#'   or the ratio would fall below `min_lambda_min_ratio`.
+#' @param min_lambda_min_ratio Lower limit for the extension.
 #' @return List with `engine`, `lambda.min`, `lambda.1se`, `n_blocks`,
+#'   `lambda_min_ratio` (used), `lambda_min_interior`,
 #'   `predict(lambda)` returning list(prediction, train_rows) with `NA` for
 #'   skipped blocks, and `coef(lambda)` returning a one-column matrix with
 #'   the intercept first.
 #' @export
 dcs_blocked_ridge <- function(x, y, blocks, nlambda = 80L, min_train = 100L,
                               engine = Sys.getenv("DOMINANT_RIDGE_ENGINE", "auto"),
-                              max_fast_features = 2000L) {
+                              max_fast_features = 2000L,
+                              lambda_min_ratio = NULL, extend_grid = TRUE,
+                              min_lambda_min_ratio = 1e-10) {
   engine <- match.arg(engine, c("auto", "fast", "glmnet"))
   if (identical(engine, "auto")) {
     engine <- if (ncol(x) <= max_fast_features) "fast" else "glmnet"
@@ -316,9 +330,32 @@ dcs_blocked_ridge <- function(x, y, blocks, nlambda = 80L, min_train = 100L,
   foldid <- match(blocks, levels_b)
   n <- length(y)
   feature_names <- colnames(x)
+  default_ratio <- if (n < ncol(x)) 0.01 else 1e-4
+  ratio <- lambda_min_ratio %||% default_ratio
+
+  cv_fit <- function(ratio) {
+    if (identical(engine, "fast")) {
+      dcs_cv_ridge(x, y, foldid, nlambda = nlambda, min_train = min_train,
+                   lambda_min_ratio = ratio)
+    } else {
+      glmnet::cv.glmnet(x, y, family = "gaussian", alpha = 0,
+                        foldid = foldid, standardize = TRUE,
+                        intercept = TRUE, nlambda = nlambda,
+                        lambda.min.ratio = ratio)
+    }
+  }
+  # A CV optimum on the smallest lambda of the path means the grid, not the
+  # data, chose the penalty: widen the path 100-fold until it is interior.
+  cv <- cv_fit(ratio)
+  while (isTRUE(extend_grid) && cv$lambda.min <= min(cv$lambda) &&
+         ratio / 100 >= min_lambda_min_ratio) {
+    ratio <- ratio / 100
+    cv <- cv_fit(ratio)
+  }
+  grid <- list(lambda_min_ratio = ratio,
+               lambda_min_interior = cv$lambda.min > min(cv$lambda))
 
   if (identical(engine, "fast")) {
-    cv <- dcs_cv_ridge(x, y, foldid, nlambda = nlambda, min_train = min_train)
     train_n <- n - tabulate(foldid, length(levels_b))
     predict_fun <- function(lambda) {
       pred <- drop(cv$fold_prediction(lambda))
@@ -331,38 +368,32 @@ dcs_blocked_ridge <- function(x, y, blocks, nlambda = 80L, min_train = 100L,
       rownames(out) <- c("(Intercept)", feature_names %||% rownames(out)[-1])
       out
     }
-    return(list(engine = engine, lambda.min = cv$lambda.min,
-                lambda.1se = cv$lambda.1se, lambda = cv$lambda,
-                cvm = cv$cvm, n_blocks = length(levels_b),
-                predict = predict_fun, coef = coef_fun))
-  }
-
-  cvfit <- glmnet::cv.glmnet(x, y, family = "gaussian", alpha = 0,
-                             foldid = foldid, standardize = TRUE,
-                             intercept = TRUE, nlambda = nlambda)
-  predict_fun <- function(lambda) {
-    pred <- rep(NA_real_, n)
-    train_rows <- rep(NA_integer_, n)
-    for (block_id in levels_b) {
-      test_idx <- which(blocks == block_id)
-      train_idx <- which(blocks != block_id)
-      if (!length(test_idx) || length(train_idx) < min_train) next
-      fit <- glmnet::glmnet(x[train_idx, , drop = FALSE], y[train_idx],
-                            family = "gaussian", alpha = 0, lambda = lambda,
-                            standardize = TRUE, intercept = TRUE)
-      pred[test_idx] <- as.numeric(stats::predict(
-        fit, newx = x[test_idx, , drop = FALSE], s = lambda))
-      train_rows[test_idx] <- length(train_idx)
+  } else {
+    predict_fun <- function(lambda) {
+      pred <- rep(NA_real_, n)
+      train_rows <- rep(NA_integer_, n)
+      for (block_id in levels_b) {
+        test_idx <- which(blocks == block_id)
+        train_idx <- which(blocks != block_id)
+        if (!length(test_idx) || length(train_idx) < min_train) next
+        fit <- glmnet::glmnet(x[train_idx, , drop = FALSE], y[train_idx],
+                              family = "gaussian", alpha = 0, lambda = lambda,
+                              standardize = TRUE, intercept = TRUE)
+        pred[test_idx] <- as.numeric(stats::predict(
+          fit, newx = x[test_idx, , drop = FALSE], s = lambda))
+        train_rows[test_idx] <- length(train_idx)
+      }
+      list(prediction = pred, train_rows = train_rows)
     }
-    list(prediction = pred, train_rows = train_rows)
+    coef_fun <- function(lambda) {
+      fit <- glmnet::glmnet(x, y, family = "gaussian", alpha = 0,
+                            lambda = lambda, standardize = TRUE,
+                            intercept = TRUE)
+      as.matrix(stats::coef(fit, s = lambda))
+    }
   }
-  coef_fun <- function(lambda) {
-    fit <- glmnet::glmnet(x, y, family = "gaussian", alpha = 0,
-                          lambda = lambda, standardize = TRUE,
-                          intercept = TRUE)
-    as.matrix(stats::coef(fit, s = lambda))
-  }
-  list(engine = engine, lambda.min = cvfit$lambda.min,
-       lambda.1se = cvfit$lambda.1se, lambda = cvfit$lambda, cvm = cvfit$cvm,
-       n_blocks = length(levels_b), predict = predict_fun, coef = coef_fun)
+  c(list(engine = engine, lambda.min = cv$lambda.min,
+         lambda.1se = cv$lambda.1se, lambda = cv$lambda, cvm = cv$cvm,
+         n_blocks = length(levels_b), predict = predict_fun, coef = coef_fun),
+    grid)
 }

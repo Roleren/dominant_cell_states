@@ -11,7 +11,10 @@ dcs_blocked_ridge(
   nlambda = 80L,
   min_train = 100L,
   engine = Sys.getenv("DOMINANT_RIDGE_ENGINE", "auto"),
-  max_fast_features = 2000L
+  max_fast_features = 2000L,
+  lambda_min_ratio = NULL,
+  extend_grid = TRUE,
+  min_lambda_min_ratio = 1e-10
 )
 }
 \arguments{
@@ -24,9 +27,19 @@ dcs_blocked_ridge(
 \item{nlambda}{Lambda path length.}
 
 \item{min_train}{Blocks with fewer training rows are not predicted.}
+
+\item{lambda_min_ratio}{Smallest lambda as a fraction of lambda_max
+(default as glmnet: 1e-4, or 0.01 when n < p).}
+
+\item{extend_grid}{When the CV optimum is the smallest lambda of the path,
+divide \code{lambda_min_ratio} by 100 and refit until the optimum is interior
+or the ratio would fall below \code{min_lambda_min_ratio}.}
+
+\item{min_lambda_min_ratio}{Lower limit for the extension.}
 }
 \value{
 List with \code{engine}, \code{lambda.min}, \code{lambda.1se}, \code{n_blocks},
+\code{lambda_min_ratio} (used), \code{lambda_min_interior},
 \code{predict(lambda)} returning list(prediction, train_rows) with \code{NA} for
 skipped blocks, and \code{coef(lambda)} returning a one-column matrix with
 the intercept first.

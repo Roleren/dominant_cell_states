@@ -4,7 +4,14 @@
 \alias{dcs_cv_ridge}
 \title{Blocked cross-validated ridge regression (glmnet-compatible, closed form)}
 \usage{
-dcs_cv_ridge(x, y, foldid, nlambda = 100L, min_train = 0L)
+dcs_cv_ridge(
+  x,
+  y,
+  foldid,
+  nlambda = 100L,
+  min_train = 0L,
+  lambda_min_ratio = NULL
+)
 }
 \arguments{
 \item{x}{Numeric (dense or sparse) design matrix without intercept column.}
@@ -18,6 +25,9 @@ dcs_cv_ridge(x, y, foldid, nlambda = 100L, min_train = 0L)
 \item{min_train}{Folds with fewer training rows get \code{NA} from
 \code{fold_prediction()} (the scripts' historical \code{length(train_idx) < 100}
 rule); the CV curve itself uses every fold, as cv.glmnet does.}
+
+\item{lambda_min_ratio}{Smallest lambda as a fraction of lambda_max
+(NULL: glmnet's default).}
 }
 \value{
 List with \code{lambda}, \code{cvm}, \code{cvsd}, \code{lambda.min}, \code{lambda.1se},

@@ -319,6 +319,9 @@ fit_blocked_residual_model <- function(model_dt, formula, label) {
       model = label,
       lambda_used = chosen$lambda_value,
       lambda_used_name = chosen$lambda_name,
+      lambda_min_ratio = ridge$lambda_min_ratio,
+      lambda_min_interior = ridge$lambda_min_interior,
+      ridge_engine = ridge$engine,
       n_rows = nrow(model_dt),
       n_features = ncol(x_all),
       blocked_cv_groups = length(study_groups)
