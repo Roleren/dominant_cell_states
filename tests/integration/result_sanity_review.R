@@ -34,7 +34,7 @@ generated_manual_files <- c(
   "manual_translon_candidates.csv",
   "manual_translon_requested_gene_uoorf_candidates.csv",
   "manual_translons_manifest.csv",
-  "manual_translons_ranges.rds"
+  "manual_translons_ranges.qs"
 )
 is_generated_root_entry <- function(x) {
   is.character(x) &&

@@ -362,7 +362,7 @@ add_status(
 )
 
 count_table_kinds <- c("cds", "leaders", "mrna", "trailers", "uorfs")
-# The server's ORFik count tables are saved as .qs (qs::qsave), not .rds;
+# The server's ORFik count tables are saved as .qs (qs2::qs_save), not .rds;
 # check both, preferring whichever actually exists on disk.
 count_table_path_for <- function(kind) {
   if (!nzchar(lib_folder)) return("")

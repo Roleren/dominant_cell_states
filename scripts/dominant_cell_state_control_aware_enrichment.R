@@ -31,6 +31,7 @@ dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
 result_file <- function(...) file.path(results_dir, ...)
 
 state_file <- result_file("human_dominant_cell_states_clean_cds.csv")
+activity_metadata_file <- result_file("human_dominant_state_activity_metadata.fst")
 metadata_file <- local({
   candidates <- c(
     Sys.getenv("DOMINANT_METADATA_FILE", unset = NA_character_),
@@ -272,8 +273,36 @@ m <- fread(metadata_file)
 m <- m[, intersect(c("Run", metadata_fields), names(m)), with = FALSE]
 dt <- merge(dt, m, by = "Run", all.x = TRUE, sort = FALSE)
 
+# The raw `dominant_state` column is an argmax across states whose raw
+# scores are not on a comparable scale (states built from intrinsically
+# high-abundance marker genes, like OXPHOS, structurally out-score states
+# built from low-abundance/conditionally-induced genes, like Interferon or
+# ISR, regardless of true relative activation -- see
+# md/dominant_state_open_analysis_2026-09-24.md). The calibrated,
+# within-state-percentile winner already computed by
+# dominant_state_activity_metadata_fst.R does not have this problem; use it
+# for the two descriptive "what fraction of samples call this state" columns
+# below instead of the raw label. This does not affect the actual effect-size
+# and significance statistics elsewhere in this script, which already compare
+# each state's own continuous score against its own control distribution.
+calibrated_winner <- if (requireNamespace("fst", quietly = TRUE) &&
+                        file.exists(activity_metadata_file)) {
+  act <- as.data.table(fst::read_fst(activity_metadata_file,
+                                     columns = c("Run", "dominant_state_top")))
+  setnames(act, "dominant_state_top", "dominant_state_calibrated")
+  act
+} else {
+  NULL
+}
+if (!is.null(calibrated_winner)) {
+  dt <- merge(dt, calibrated_winner, by = "Run", all.x = TRUE, sort = FALSE)
+} else {
+  dt[, dominant_state_calibrated := dominant_state]
+}
+
 state_cols <- setdiff(names(dt), c("Run", "sample", "dominant_state",
-                                   "dominant_state_score", metadata_fields))
+                                   "dominant_state_score",
+                                   "dominant_state_calibrated", metadata_fields))
 state_cols <- state_cols[state_cols != "Baseline (control)"]
 
 for (field in metadata_fields) {
@@ -337,9 +366,9 @@ contrasts <- rbindlist(lapply(unique(dt$stratum_id), function(stratum) {
           score_delta / pooled_sd
         } else NA_real_,
         case_dominant_call_fraction =
-          mean(case_dt$dominant_state == state, na.rm = TRUE),
+          mean(case_dt$dominant_state_calibrated == state, na.rm = TRUE),
         control_dominant_call_fraction =
-          mean(controls$dominant_state == state, na.rm = TRUE),
+          mean(controls$dominant_state_calibrated == state, na.rm = TRUE),
         wilcox_greater_p = safe_wilcox(case_score, control_score, "greater"),
         wilcox_less_p = safe_wilcox(case_score, control_score, "less")
       )

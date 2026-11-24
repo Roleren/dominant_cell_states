@@ -43,12 +43,14 @@ module_definition_file <- file.path(
 if (!file.exists(module_definition_file)) {
   stop("Missing dominant-state module definition file: ", module_definition_file)
 }
-source(module_definition_file)
+source(module_definition_file, local = TRUE)
 coverage_cache_file <- file.path(analysis_dir, "scripts", "dominant_coverage_cache.R")
 if (!file.exists(coverage_cache_file)) {
   stop("Missing dominant coverage cache helper: ", coverage_cache_file)
 }
-source(coverage_cache_file)
+source(coverage_cache_file, local = TRUE)
+source(file.path(analysis_dir, "scripts", "dominant_object_cache.R"), local = TRUE)
+source(file.path(analysis_dir, "scripts", "dominant_transcript_mapping.R"), local = TRUE)
 dominant_state_modules <- load_dominant_state_modules(analysis_dir)
 
 gene_list_text <- function(x) {
@@ -64,7 +66,7 @@ range_positions <- function(grl) {
 safe_pmap_positions <- function(query, subject) {
   if (length(query) == 0 || length(subject) == 0) return(integer())
   mapped <- tryCatch(
-    suppressWarnings(pmapToTranscriptF(query, subject)),
+    suppressWarnings(dominant_checked_pmap(query, subject)),
     error = function(e) GRangesList()
   )
   range_positions(mapped)
@@ -84,9 +86,10 @@ make_display_region <- function(leader_tx, cds_tx, tx_id) {
 
 load_translon_source <- function(paths, source) {
   path <- unique(paths)
+  path <- unname(vapply(path, dominant_preferred_object_file, character(1)))
   path <- path[file.exists(path)][1]
   if (is.na(path)) return(GRangesList())
-  translons <- read_RDSQS(path)
+  translons <- dominant_read_external_object(path)
   mcols(translons)$translon_source <- source
   translons
 }
@@ -105,8 +108,11 @@ load_predicted_translons <- function(df) {
               "predicted_translons_ranges.qs")
   )
   m_paths <- c(
-    file.path("dominant_cell_states", "manual_translons", "manual_translons_ranges.rds"),
-    file.path("manual_translons", "manual_translons_ranges.rds")
+    file.path(Sys.getenv("DOMINANT_CELL_STATES_RESULTS_DIR",
+                         unset = file.path(analysis_dir, "results")),
+              "manual_translons", "manual_translons_ranges.qs"),
+    file.path("dominant_cell_states", "manual_translons", "manual_translons_ranges.qs"),
+    file.path("manual_translons", "manual_translons_ranges.qs")
   )
   t <- load_translon_source(t_paths, "T")
   tc <- load_translon_source(tc_paths, "TC")
@@ -154,27 +160,20 @@ load_symbol_table <- function(df) {
 
 collapse_to_tx_iranges <- function(mapped) {
   starts <- vapply(mapped, function(x) {
-    if (length(x) == 0) return(NA_integer_)
+    if (length(x) == 0) return(0L)
     min(start(x))
   }, integer(1))
   ends <- vapply(mapped, function(x) {
-    if (length(x) == 0) return(NA_integer_)
+    if (length(x) == 0) return(-1L)
     max(end(x))
   }, integer(1))
   IRanges(start = starts, end = ends)
 }
 
 safe_pmap_translons_to_transcript <- function(translons, mrna) {
-  mapped_list <- lapply(seq_along(translons), function(i) {
-    tx_id <- names(translons)[i]
-    tryCatch(
-      suppressWarnings(pmapToTranscriptF(translons[i], mrna[tx_id])[[1]]),
-      error = function(e) GRanges()
-    )
-  })
-  mapped <- GRangesList(mapped_list)
-  names(mapped) <- names(translons)
-  mapped
+  # Invalid pairs are filtered by the checked mapper, so valid pairs can use
+  # the vectorized mapping path without aborting on a single malformed ORF.
+  dominant_checked_pmap(translons, mrna[names(translons)])
 }
 
 annotate_translon_categories <- function(translons, cds, mrna) {
@@ -190,7 +189,7 @@ annotate_translon_categories <- function(translons, cds, mrna) {
   mapped <- safe_pmap_translons_to_transcript(translons, mrna)
   tx_iranges <- collapse_to_tx_iranges(mapped)
   valid <- !is.na(start(tx_iranges)) & !is.na(end(tx_iranges)) &
-    end(tx_iranges) >= start(tx_iranges)
+    start(tx_iranges) >= 1L & end(tx_iranges) >= start(tx_iranges)
   if (!all(valid)) {
     warning("Dropping ", sum(!valid),
             " predicted translons with invalid transcript-coordinate ranges.")
@@ -200,7 +199,8 @@ annotate_translon_categories <- function(translons, cds, mrna) {
   if (length(translons) == 0) return(translons)
   categories <- rep(NA_character_, length(translons))
 
-  valid <- !is.na(start(tx_iranges)) & !is.na(end(tx_iranges))
+  valid <- !is.na(start(tx_iranges)) & !is.na(end(tx_iranges)) &
+    start(tx_iranges) >= 1L & end(tx_iranges) >= start(tx_iranges)
   if (any(valid)) {
     groupings <- match(names(translons)[valid], names(mrna))
     categories[valid] <- ORFik:::categorize_ORFs(
@@ -335,7 +335,7 @@ get_lib_sizes_file <- function(df) {
 }
 
 library_sizes_by_run <- function(df) {
-  lib_sizes <- readRDS(get_lib_sizes_file(df))
+  lib_sizes <- dominant_read_external_object(get_lib_sizes_file(df))
   if (length(lib_sizes) == nrow(df)) {
     names(lib_sizes) <- runIDs(df)
   }
@@ -724,8 +724,18 @@ selected_transcripts <- rbindlist(lapply(target_genes, function(gene) {
       is_canonical_isoform = NA
     ))
   }
-  choose_gene_transcript(gene, tx_ids, cds_all, leader_all, translons,
-                         transcript_exon_qc)
+  signature <- list(
+    computation = dominant_computation_signature(choose_gene_transcript),
+    gene = gene, cds = cds_all[intersect(tx_ids, names(cds_all))], leader = leader_all[intersect(tx_ids, names(leader_all))],
+    translons = translons[names(translons) %chin% tx_ids],
+    canonical = intersect(tx_ids, canonical_tx), exon_qc = transcript_exon_qc[tx_id %chin% tx_ids],
+    orfik_version = dominant_orfik_cache_version()
+  )
+  dominant_cached_object(
+    file.path(analysis_dir, "results", ".measurement_cache"),
+    paste0("selection_clean_", gene), signature,
+    function() choose_gene_transcript(gene, tx_ids, cds_all, leader_all, translons, transcript_exon_qc)
+  )
 }), fill = TRUE)
 
 module_membership <- rbindlist(lapply(seq_len(nrow(dominant_state_modules)), function(i) {
@@ -793,8 +803,24 @@ expr_list <- lapply(seq_len(nrow(selected_transcripts)), function(i) {
     return(out)
   }
   message("Measuring ", selected$gene_symbol, " (", selected$tx_id, ")")
-  measure_gene_clean_cds(selected, cds_all, leader_all, translons,
-                         fst_index, lib_sizes)
+  tx_id <- selected$tx_id
+  signature <- list(
+    version = "clean-cds-measurement-v1",
+    orfik_version = dominant_orfik_cache_version(),
+    cache_helper = unname(tools::md5sum(coverage_cache_file)),
+    computation = dominant_computation_signature(measure_gene_clean_cds),
+    coverage = dominant_display_signature(
+      make_display_region(leader_all[intersect(tx_id, names(leader_all))], cds_all[tx_id], tx_id), fst_index),
+    translons = translons[names(translons) == tx_id],
+    lib_sizes = lib_sizes
+  )
+  dominant_cached_object(
+    file.path(analysis_dir, "results", ".measurement_cache"),
+    paste0("clean_cds_", selected$gene_symbol, "_", tx_id), signature,
+    function() measure_gene_clean_cds(selected, cds_all, leader_all, translons,
+                                    fst_index, lib_sizes),
+    cacheable = function(value) all(is.finite(value))
+  )
 })
 
 gene_expr <- do.call(rbind, expr_list)

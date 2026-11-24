@@ -44,6 +44,7 @@ find_analysis_dir <- function(start = getwd()) {
 analysis_dir <- find_analysis_dir()
 analysis_dir_norm <- normalizePath(analysis_dir, mustWork = TRUE)
 analysis_results_dir <- file.path(analysis_dir_norm, "results")
+source(file.path(analysis_dir_norm, "scripts", "dominant_observatory_urls.R"), local = TRUE)
 path_exists_or_link <- function(path) {
   link <- Sys.readlink(path)
   file.exists(path) || (!is.na(link) && nzchar(link))
@@ -122,7 +123,7 @@ partial_pooling <- if (file.exists(partial_pooling_file)) {
 }
 read_analysis_csv <- function(...) {
   path <- analysis_path(...)
-  if (file.exists(path)) fread(path, showProgress = FALSE) else data.table()
+  if (file.exists(path)) dominant_observatory_upgrade_table(fread(path, showProgress = FALSE)) else data.table()
 }
 review_batch_template <- read_analysis_csv(
   "dominant_rdg_review_links",
@@ -1661,7 +1662,8 @@ render_report_frame <- function(rel_path) {
 load_rdg_metadata <- function() {
   candidates <- c(
     analysis_path("metadata_done_samples_extended_qc.csv"),
-    "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv"
+    "/media/roler/S/data/Bio_data/projects/metadata_done_samples_extended_qc.csv",
+    path.expand("~/livemount/Bio_data/NGS_pipeline/metadata_done_samples_extended_qc.csv")
   )
   candidates <- candidates[file.exists(candidates)]
   if (!length(candidates)) return(list(data = data.table(), path = NA_character_))
@@ -1717,72 +1719,6 @@ make_gene_label_map <- function(card_dt) {
   out[!is_informative_text(observatory_gene_label),
       observatory_gene_label := gene_symbol]
   out
-}
-
-rdg_observatory_compact_selections <- function(selections) {
-  if (is.null(selections) || !is.list(selections)) {
-    return(list(active = "1", order = "1", labels = list("1" = ""),
-                runs = character(), p = list("1" = integer()),
-                d = list("1" = integer())))
-  }
-
-  ids <- as.character(selections$index %||%
-                        names(selections$plot_selections %||% list("1" = NULL)))
-  if (length(ids) == 0) ids <- "1"
-  plot_sel <- selections$plot_selections %||% list()
-  data_sel <- selections$data_table_selections %||% list()
-  labels <- selections$labels %||% list()
-  active <- as.character(selections$active_selection_id %||% ids[1])
-  if (!(active %in% ids)) active <- ids[1]
-
-  all_runs <- unique(unlist(c(plot_sel[ids], data_sel[ids]), use.names = FALSE))
-  all_runs <- all_runs[!is.na(all_runs) & nzchar(all_runs)]
-  run_to_idx <- stats::setNames(seq_along(all_runs), all_runs)
-
-  encode_idx <- function(x) {
-    if (is.null(x) || length(x) == 0) return(integer())
-    as.integer(run_to_idx[as.character(x)])
-  }
-
-  p <- setNames(lapply(ids, function(selection_id) {
-    encode_idx(plot_sel[[selection_id]])
-  }), ids)
-  d <- setNames(lapply(ids, function(selection_id) {
-    encode_idx(data_sel[[selection_id]])
-  }), ids)
-  lb <- setNames(lapply(ids, function(selection_id) {
-    as.character(labels[[selection_id]] %||% "")
-  }), ids)
-
-  list(active = active, order = ids, labels = lb, runs = all_runs, p = p, d = d)
-}
-
-rdg_observatory_state_from_inputs <- function(
-  selected_experiment,
-  color_by,
-  view = c("umap", "browser")[1],
-  browser = list(),
-  selections = list()
-) {
-  view <- tolower(as.character(view)[1])
-  if (!view %in% c("umap", "browser")) view <- "umap"
-  list(
-    v = 1L,
-    exp = as.character(selected_experiment %||% ""),
-    color_by = as.character(color_by %||% character()),
-    view = view,
-    browser = browser,
-    selections = rdg_observatory_compact_selections(selections)
-  )
-}
-
-rdg_make_observatory_url_state_param <- function(state) {
-  json <- jsonlite::toJSON(state, auto_unbox = TRUE, null = "null")
-  compressed <- memCompress(charToRaw(json), type = "gzip")
-  encoded <- jsonlite::base64_enc(compressed)
-  encoded <- gsub("[\r\n]", "", encoded)
-  encoded <- chartr("+/", "-_", encoded)
-  sub("=+$", "", encoded)
 }
 
 best_branch_context <- function(row) {
@@ -1921,12 +1857,7 @@ make_observatory_link_row <- function(row, metadata, gene_labels) {
     data_table_selections[["1"]] <- character()
     labels[["1"]] <- "No matched case/control subset"
   }
-  if (!("3" %in% selection_ids)) {
-    selection_ids <- unique(c(selection_ids, "3"))
-    plot_selections[["3"]] <- character()
-    data_table_selections[["3"]] <- character()
-    labels[["3"]] <- "All merged"
-  }
+
 
   browser <- list(
     gene = gene_label,
@@ -1944,7 +1875,7 @@ make_observatory_link_row <- function(row, metadata, gene_labels) {
     customSequence = "",
     go = TRUE
   )
-  state <- rdg_observatory_state_from_inputs(
+  state <- dominant_observatory_state_from_inputs(
     selected_experiment = "all_samples-Homo_sapiens",
     color_by = c("tissue", "cell_line"),
     view = "browser",
@@ -1954,11 +1885,11 @@ make_observatory_link_row <- function(row, metadata, gene_labels) {
       plot_selections = plot_selections,
       data_table_selections = data_table_selections,
       labels = labels,
-      active_selection_id = "3"
+      active_selection_id = selection_ids[1]
     )
   )
   url <- paste0("https://ribocrypt.org/#Observatory?obs_state=",
-                rdg_make_observatory_url_state_param(state))
+                dominant_observatory_state_param(state))
   note <- paste0(
     subset$note,
     "; study=", subset$study %||% "",
@@ -2084,11 +2015,7 @@ make_partial_pooling_observatory_link_row <- function(row, metadata,
     data_table_selections[["1"]] <- character()
     labels[["1"]] <- "No matched partial-pooling subset"
   }
-  all_id <- as.character(length(selection_ids) + 1L)
-  selection_ids <- unique(c(selection_ids, all_id))
-  plot_selections[[all_id]] <- character()
-  data_table_selections[[all_id]] <- character()
-  labels[[all_id]] <- "All merged"
+
 
   browser <- list(
     gene = gene_label,
@@ -2106,7 +2033,7 @@ make_partial_pooling_observatory_link_row <- function(row, metadata,
     customSequence = "",
     go = TRUE
   )
-  state <- rdg_observatory_state_from_inputs(
+  state <- dominant_observatory_state_from_inputs(
     selected_experiment = "all_samples-Homo_sapiens",
     color_by = c("tissue", "cell_line"),
     view = "browser",
@@ -2116,7 +2043,7 @@ make_partial_pooling_observatory_link_row <- function(row, metadata,
       plot_selections = plot_selections,
       data_table_selections = data_table_selections,
       labels = labels,
-      active_selection_id = all_id
+      active_selection_id = selection_ids[1]
     )
   )
   note <- paste0(
@@ -2129,7 +2056,7 @@ make_partial_pooling_observatory_link_row <- function(row, metadata,
   data.table(
     partial_pooling_observatory_url = paste0(
       "https://ribocrypt.org/#Observatory?obs_state=",
-      rdg_make_observatory_url_state_param(state)
+      dominant_observatory_state_param(state)
     ),
     partial_pooling_observatory_link_note = note,
     partial_pooling_context_case_n = length(subset$context_case_runs),

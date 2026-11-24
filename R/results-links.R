@@ -46,7 +46,7 @@ dcs_legacy_result_link_paths <- function(root = dcs_project_root()) {
       "manual_translon_candidates.csv",
       "manual_translon_requested_gene_uoorf_candidates.csv",
       "manual_translons_manifest.csv",
-      "manual_translons_ranges.rds"
+      "manual_translons_ranges.qs"
     )
   )
 

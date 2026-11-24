@@ -1,3 +1,12 @@
+serialization_helper <- c(
+  file.path("scripts", "dominant_serialization.R"),
+  file.path("dominant_cell_states", "scripts", "dominant_serialization.R"),
+  file.path("..", "..", "scripts", "dominant_serialization.R")
+)
+serialization_helper <- serialization_helper[file.exists(serialization_helper)][1]
+if (is.na(serialization_helper)) stop("Missing dominant_serialization.R")
+source(serialization_helper, local = TRUE)
+
 dominant_loader <- c(
   file.path("scripts", "dominant_ribocrypt_loader.R"),
   file.path("dominant_cell_states", "scripts", "dominant_ribocrypt_loader.R")
@@ -18,13 +27,18 @@ analysis_dir <- if (dir.exists("dominant_cell_states")) {
   "."
 }
 
-manual_dir <- file.path(analysis_dir, "manual_translons")
+manual_dir <- file.path(
+  Sys.getenv("DOMINANT_CELL_STATES_RESULTS_DIR",
+             unset = file.path(analysis_dir, "results")),
+  "manual_translons"
+)
 dir.create(manual_dir, recursive = TRUE, showWarnings = FALSE)
 
-manual_ranges_file <- file.path(manual_dir, "manual_translons_ranges.rds")
+manual_ranges_file <- file.path(manual_dir, "manual_translons_ranges.qs")
 candidate_manifest_file <- file.path(manual_dir, "manual_translon_candidates.csv")
 selected_manifest_file <- file.path(manual_dir, "manual_translons_manifest.csv")
-manual_additions_file <- file.path(manual_dir, "translons_to_be_added_to_manual.txt")
+manual_additions_file <- file.path(analysis_dir, "manual_translons",
+                                 "translons_to_be_added_to_manual.txt")
 
 discovered_manual_targets <- data.table(
   gene_symbol = c("SNAI2", "MMP2"),
@@ -83,7 +97,7 @@ manual_category_override_allowed <- function(manual_type, category) {
   manual_type == "internal" & category %chin% c("internal", "uORF", "uoORF")
 }
 
-read_manual_additions <- function(path, analysis_dir) {
+read_manual_additions <- function(path, analysis_dir, annotation_lookup = NULL) {
   if (!file.exists(path)) {
     return(data.table())
   }
@@ -131,11 +145,34 @@ read_manual_additions <- function(path, analysis_dir) {
       .(gene_symbol = toupper(gene_symbol), tx_id, lookup_source = "rdg_feature_annotation")
     ])
   }
-  if (nrow(tx_lookup) == 0) {
-    stop(
-      "Could not resolve manual addition gene symbols to transcript IDs. ",
-      "Rerun clean-CDS diagnostics first or add tx_id support to the manual file."
-    )
+  missing_genes <- setdiff(additions$gene_symbol, tx_lookup$gene_symbol)
+  if (length(missing_genes)) {
+    if (is.null(annotation_lookup)) {
+      annotation_df <- ORFik::read.experiment("all_samples-Homo_sapiens",
+                                            validate = FALSE)
+      symbol_map <- as.data.table(ORFik::symbols(annotation_df))
+      canonical_tx <- ORFik::canonical_isoforms(annotation_df)
+      annotation_lookup <- unique(symbol_map[
+        toupper(external_gene_name) %chin% missing_genes &
+          ensembl_tx_name %chin% canonical_tx,
+        .(gene_symbol = toupper(external_gene_name), tx_id = ensembl_tx_name)
+      ])
+    }
+    fallback <- unique(as.data.table(annotation_lookup)[
+      gene_symbol %chin% missing_genes & !is.na(tx_id) & nzchar(tx_id),
+      .(gene_symbol, tx_id)
+    ])
+    ambiguous <- fallback[, .N, by = gene_symbol][N > 1L, gene_symbol]
+    if (length(ambiguous)) {
+      stop("Ambiguous canonical transcripts for manual additions: ",
+           paste(ambiguous, collapse = ", "), call. = FALSE)
+    }
+    fallback[, lookup_source := "canonical_annotation"]
+    tx_lookup <- rbind(tx_lookup, fallback, fill = TRUE)
+    if (nrow(fallback)) {
+      message("Resolved manual additions outside the measured panel using ",
+              "canonical annotations: ", paste(fallback$gene_symbol, collapse = ", "))
+    }
   }
 
   additions <- merge(additions, tx_lookup, by = "gene_symbol", all.x = TRUE, sort = FALSE)
@@ -193,9 +230,10 @@ collapse_to_tx_iranges <- function(mapped) {
 
 load_translon_source <- function(paths, source) {
   path <- unique(paths)
+  path <- unname(vapply(path, dominant_preferred_object_file, character(1)))
   path <- path[file.exists(path)][1]
   if (is.na(path)) return(GRangesList())
-  translons <- read_RDSQS(path)
+  translons <- dominant_read_external_object(path)
   mcols(translons)$translon_source <- source
   translons
 }
@@ -352,7 +390,21 @@ candidate_dt <- data.table(
 
 message("Scoring manual uoORF candidates on ", Sys.getenv("RDG_SDRIVE_EXPERIMENT", unset = "all_merged-Homo_sapiens"), " pshifted coverage")
 df_activity <- ORFik::read.experiment(Sys.getenv("RDG_SDRIVE_EXPERIMENT", unset = "all_merged-Homo_sapiens"), validate = FALSE)
-activity_scores <- score_with_merged_rfp(df_activity, uo_candidates, mrna)
+source(file.path(analysis_dir, "scripts", "dominant_object_cache.R"), local = TRUE)
+activity_signature <- list(
+  version = "manual-activity-v1",
+  candidates = uo_candidates,
+  mrna = mrna[unique(names(uo_candidates))],
+  coverage_files = dominant_input_files(ORFik::filepath(df_activity, "pshifted")),
+  unique_mappers = ORFik::uniqueMappers(df_activity),
+  scorer = dominant_function_signature(score_with_merged_rfp),
+  orfik_scorer = dominant_function_signature(ORFik:::coveragePerORFStatistics),
+  orfik_version = dominant_orfik_cache_version()
+)
+activity_scores <- dominant_cached_object(
+  file.path(manual_dir, ".activity_cache"), "discovered_uoorfs", activity_signature,
+  function() score_with_merged_rfp(df_activity, uo_candidates, mrna)
+)
 candidate_dt <- cbind(candidate_dt, activity_scores)
 
 candidate_dt[
@@ -472,7 +524,7 @@ mcols(manual_translons)$manual_category_override_allowed <- selected_dt$category
 mcols(manual_translons)$manual_source_short <- "M"
 mcols(manual_translons)$manual_source_name <- "manual"
 
-saveRDS(manual_translons, manual_ranges_file)
+dominant_save_object(manual_translons, manual_ranges_file)
 fwrite(candidate_dt, candidate_manifest_file)
 setorder(selected_dt, gene_symbol, tx_start, tx_end)
 fwrite(selected_dt, selected_manifest_file)

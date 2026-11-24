@@ -1,3 +1,12 @@
+serialization_helper <- c(
+  file.path("scripts", "dominant_serialization.R"),
+  file.path("dominant_cell_states", "scripts", "dominant_serialization.R"),
+  file.path("..", "..", "scripts", "dominant_serialization.R")
+)
+serialization_helper <- serialization_helper[file.exists(serialization_helper)][1]
+if (is.na(serialization_helper)) stop("Missing dominant_serialization.R")
+source(serialization_helper, local = TRUE)
+
 dominant_coverage_cache_dir <- function(analysis_dir) {
   cache_dir <- file.path(analysis_dir, ".coverage_cache")
   dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
@@ -42,7 +51,7 @@ dominant_coverage_cache_file <- function(analysis_dir, gene_symbol, tx_id,
   )
   file.path(
     dominant_coverage_cache_dir(analysis_dir),
-    paste0(prefix, "__", dominant_hash_object(signature), ".rds")
+    paste0(prefix, "__", dominant_hash_object(signature), ".qs")
   )
 }
 
@@ -60,14 +69,14 @@ dominant_cached_coverage_by_transcript <- function(display_region, fst_index,
   )
 
   if (!force && file.exists(cache_file)) {
-    cached <- tryCatch(readRDS(cache_file), error = function(e) NULL)
+    cached <- tryCatch(dominant_read_object(cache_file), error = function(e) NULL)
     if (!is.null(cached) && identical(cached$signature, signature)) {
       return(cached$coverage)
     }
   }
 
   coverage <- reader(display_region, fst_index, columns = NULL)[[1]]
-  saveRDS(
+  dominant_save_object(
     list(
       generated = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
       gene_symbol = gene_symbol,

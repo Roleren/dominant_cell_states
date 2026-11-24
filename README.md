@@ -38,22 +38,44 @@ worst-position-deletion gates passed. The UV switch independently survives
 separate short/canonical footprint, per-length P-site, replicate-range,
 coordinate and deletion gates. It remains a causal hypothesis, not a
 demonstrated mechanism. Start with
-`md/eif4g2_recycling_stress_working_note.md` for the exact evidence and claim
-boundary.
+`papers/EIF4G2/eif4g2_recycling_stress_working_note.md` for the exact evidence
+and claim boundary.
 
-A Nature-style paper workspace is under `manuscript/`. It keeps the editable
+Candidate papers arising from this atlas (EIF4G2, METTL3, and any future
+additions) live under `papers/`, one folder per candidate, indexed by
+`papers/README.md`'s motherboard table. `papers/EIF4G2/` keeps the editable
 article, Methods, figure plan, Extended Data, cover letter and anti-overclaiming
 claim ledger in Markdown, with an audited Word export for Google Docs generated
 by `scripts/build_eif4g2_manuscript.sh`.
+
+## Cached R objects
+
+Project-owned binary caches, manual translon ranges, checkpoints and shift tables
+use `.qs` files written by **qs2**. `DOMINANT_QS_THREADS` defaults to four and
+accepts a positive integer override. Writes use a temporary file and atomic rename.
+This `.qs` format uses qs2, rather than the older qs package.
+
+External ORFik/Bio_data inputs retain their existing formats. Readers prefer a
+`.qs` sibling when it is at least as recent as the RDS source, and retain RDS
+compatibility otherwise; both paths are tracked for cache invalidation. External
+inputs are not copied into this repository.
+
+The migration audit and RDS recovery copies live locally under
+`results/qs2_migration_2026-10-09/`. The conversion checks each round trip before
+archiving its original. Scientific cache values are preserved; serialization-only
+cache metadata is rebased after validating pre-existing outputs and dependencies.
 
 ## Important Files To Read First
 
 - `AGENTS.md`: local operating instructions for Codex or another coding agent.
 - `md/dominant_cell_state_scientific_note.md`: scientific state, interpretation
   rules, current result counts, and next-model priorities.
-- `md/eif4g2_recycling_stress_working_note.md`: focused EIF4G2/tRNA-Glu/raw-UV
-  evidence, falsification record, novelty boundary, and recovery paths.
-- `manuscript/README.md`: Nature Article working draft, Google Docs build,
+- `papers/README.md`: master index (motherboard table) of candidate papers and
+  their evidence stage.
+- `papers/EIF4G2/eif4g2_recycling_stress_working_note.md`: focused
+  EIF4G2/tRNA-Glu/raw-UV evidence, falsification record, novelty boundary, and
+  recovery paths.
+- `papers/EIF4G2/README.md`: Nature Article working draft, Google Docs build,
   figure plan, submission gates, and manuscript audit.
 - `md/dominant_rdg_atlas_browser_tutorial.md`: how to use the Shiny browser and
   review surfaces.
@@ -189,6 +211,14 @@ df <- ORFik::read.experiment("human_all_merged_l50")
 
 ## Current Review Priorities
 
+Additional gene-level priorities are maintained in the tracked
+`curated_inputs/curated_additional_gene_priorities.csv`. These extend the
+clean-CDS/translon target panel without assigning genes to a scored state.
+The loader also includes any legacy local priority file under
+`results/curated_inputs/`. BOD1L1 and FMR1 were added as analysis-only
+priorities; see `md/bod1l1_fmr1_priority_review_2026-10-08.md` for the
+module-membership assessment.
+
 1. Use `merged_replicate_translon_shift_candidate_queue.csv` for the
    clean-CDS/uORF redistribution review goal.
 2. Start with `next_review_action`, `pooling_benefit_class`,
@@ -199,3 +229,35 @@ df <- ORFik::read.experiment("human_all_merged_l50")
 4. Use the Shiny browser Workbench and Inspection Assets for manual review.
 5. Feed completed labels back through review-feedback and validation-label
    bridge steps before recalibrating motif/context filters.
+
+## Incremental runs and cache invalidation
+
+The [performance report](md/dominant_state_pipeline_performance_2026-10-09.md)
+contains benchmarks, remaining bottlenecks, and reproduction commands.
+Unchanged per-gene transcript selection and clean-CDS/uORF measurements are
+reused when curated genes or manual coordinates are added. The merged-coverage
+scores for discovered manual candidates have a separate cache.
+
+Rebuilding `all_samples-Homo_sapiens/collection_tables_indexed/coverage_index.fst`
+invalidates coverage-derived measurements for every gene. The index timestamp
+is the update marker for the complete megafst collection; rebuild it whenever
+that collection is replaced. The runner also tracks the experiment CSV,
+`QC_STATS/totalCounts_mrna.rds`, and the CDS count-table fallback input
+(the fallback is currently disabled).
+
+`force = TRUE` reruns a pipeline step while retaining valid measurement caches.
+The runner defaults to at most four `data.table` threads; set
+`DOMINANT_DT_THREADS` to a positive integer to override it.
+Set `DOMINANT_MEASUREMENT_CACHE=off` to benchmark or recompute derived
+measurements without using their caches. Existing transcript coverage caches
+still follow the index signature. The current ranking file is
+`dominant_next_model_candidate_rankings.csv`, with `candidate_rank` and
+`candidate_score`; v2/v3/v4 exports are no longer produced.
+
+### Internal noise removal model (optional, not included)
+
+Optional pipeline steps can add tracks from an internal noise removal model and compare them with the observed-count measurements. The model and its steps are not part of this repository; without them the pipeline runs its established measurements unchanged.
+
+ORFik development fixes 1.29.12, 1.29.14 and 1.29.15 were explicitly confirmed compatible by the user on 2026-10-09. Their analysis-cache version is normalized to 1.29.14; data and computation signatures still apply, and other ORFik versions invalidate normally.
+
+

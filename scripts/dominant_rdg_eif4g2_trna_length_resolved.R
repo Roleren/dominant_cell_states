@@ -1,3 +1,12 @@
+serialization_helper <- c(
+  file.path("scripts", "dominant_serialization.R"),
+  file.path("dominant_cell_states", "scripts", "dominant_serialization.R"),
+  file.path("..", "..", "scripts", "dominant_serialization.R")
+)
+serialization_helper <- serialization_helper[file.exists(serialization_helper)][1]
+if (is.na(serialization_helper)) stop("Missing dominant_serialization.R")
+source(serialization_helper, local = TRUE)
+
 #!/usr/bin/env Rscript
 
 suppressPackageStartupMessages({
@@ -155,11 +164,11 @@ build_calibration_windows <- function(txdb) {
 }
 
 calibration_cache_file <- file.path(
-  output_dir, "calibration_windows_checkpoint.rds"
+  output_dir, "calibration_windows_checkpoint.qs"
 )
 calibration_cache_version <- 1L
 calibration_checkpoint <- if (file.exists(calibration_cache_file)) {
-  readRDS(calibration_cache_file)
+  dominant_read_object(calibration_cache_file)
 } else {
   NULL
 }
@@ -174,7 +183,7 @@ if (is.list(calibration_checkpoint) &&
     stop("Too few non-overlapping CDS-start calibration windows.",
          call. = FALSE)
   }
-  saveRDS(
+  dominant_save_object(
     list(version = calibration_cache_version, windows = calibration_windows),
     calibration_cache_file
   )

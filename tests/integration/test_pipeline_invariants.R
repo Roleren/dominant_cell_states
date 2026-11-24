@@ -40,7 +40,7 @@ generated_manual_files <- c(
   "manual_translon_candidates.csv",
   "manual_translon_requested_gene_uoorf_candidates.csv",
   "manual_translons_manifest.csv",
-  "manual_translons_ranges.rds"
+  "manual_translons_ranges.qs"
 )
 is_generated_root_entry <- function(x) {
   is.character(x) &&
@@ -458,19 +458,17 @@ if ("manual_selected" %in% names(manual_dt)) {
 
 message("Checking candidate rank table")
 candidate_file <- file.path(analysis_dir, "dominant_next_model",
-                            "dominant_next_model_candidate_rankings_v4.csv")
+                            "dominant_next_model_candidate_rankings.csv")
 expect_file(candidate_file)
 candidate <- data.table::fread(candidate_file, nThread = 1)
-expect("candidate_rank_v4" %in% names(candidate),
-       "candidate_rank_v4 is missing.")
-expect(all(candidate$candidate_rank_v4 == seq_len(nrow(candidate))),
-       "candidate_rank_v4 must match row order.")
-if ("candidate_rank" %in% names(candidate)) {
-  expect(all(candidate$candidate_rank == candidate$candidate_rank_v4),
-         "candidate_rank should be the current rank alias.")
-}
-expect(all(diff(candidate$next_iteration_candidate_score_v4) <= 1e-12),
-       "candidate table must be sorted by descending v4 score.")
+expect("candidate_rank" %in% names(candidate),
+       "candidate_rank is missing.")
+expect(all(candidate$candidate_rank == seq_len(nrow(candidate))),
+       "candidate_rank must match row order.")
+expect(!any(grepl("candidate_rank_v[234]|next_iteration_candidate_score", names(candidate))),
+       "Retired ranking columns must not appear in the current table.")
+expect(all(diff(candidate$candidate_score) <= 1e-12),
+       "candidate table must be sorted by descending candidate score.")
 
 message("Checking auxiliary dominant-state screen")
 aux_dir <- file.path(analysis_dir, "dominant_state_auxiliary_modules")

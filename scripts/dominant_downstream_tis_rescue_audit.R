@@ -359,7 +359,7 @@ cache_file_for_gene_tx <- function(gene_symbol, tx_id) {
     dominant_safe_name(gene_symbol),
     "__",
     dominant_safe_name(tx_id),
-    "__.*\\.rds$"
+    "__.*\\.qs$"
   )
   files <- list.files(cache_dir, pattern = pattern, full.names = TRUE)
   if (!length(files)) return(NA_character_)
@@ -653,7 +653,7 @@ for (i in seq_len(nrow(review))) {
     )
     next
   }
-  cache_obj <- tryCatch(readRDS(cache_file), error = function(e) NULL)
+  cache_obj <- tryCatch(dominant_read_object(cache_file), error = function(e) NULL)
   if (is.null(cache_obj) || is.null(cache_obj$coverage)) {
     missing_cache <- rbind(
       missing_cache,

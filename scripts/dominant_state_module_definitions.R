@@ -53,9 +53,9 @@ base_dominant_state_modules <- function() {
         "TGFBI", "CXCL8", "IL6", "CCND1"),
       c("NDUFA1", "NDUFS1", "SDHB", "UQCRC1", "COX5A", "ATP5F1A",
         "ATP5MC1", "PHB2"),
-      c("ACTB", "GAPDH", "HPRT1", "TBP", "PPIA", "UBC", "YWHAZ",
+      c("ACTB", "GAPDH", "HPRT1", "TBP", "PPIA", "YWHAZ",
         "EEF1A1", "PSMB4", "RPS18", "RPL27", "RPL30", "RPS27A", "TPT1",
-        "RPL13A", "B2M")
+        "RPL13A")
     ),
     down_genes = list(
       character(),
@@ -65,7 +65,7 @@ base_dominant_state_modules <- function() {
       character(),
       c("CDH1", "EPCAM", "KRT8", "KRT18", "KRT19"),
       "LMNB1",
-      c("SLC2A1", "LDHA", "PDK1"),
+      c("SLC2A1"),
       character()
     )
   )
@@ -179,18 +179,28 @@ resolve_dominant_state_gene_symbols <- function(genes) {
 }
 
 load_additional_prior_gene_set <- function(analysis_dir = dominant_state_analysis_dir()) {
-  priority_file <- dominant_state_curated_input_file(
-    analysis_dir,
-    "curated_additional_gene_priorities.csv"
+  priority_files <- c(
+    file.path(analysis_dir, "curated_inputs", "curated_additional_gene_priorities.csv"),
+    dominant_state_curated_input_file(
+      analysis_dir, "curated_additional_gene_priorities.csv"
+    )
   )
-  if (!file.exists(priority_file)) {
+  priority_files <- unique(priority_files[file.exists(priority_files)])
+  if (!length(priority_files)) {
     return(character())
   }
 
-  genes <- fread(priority_file, showProgress = FALSE)
+  genes <- rbindlist(lapply(priority_files, function(priority_file) {
+    genes <- fread(priority_file, showProgress = FALSE)
+    if (!"gene_symbol" %chin% names(genes)) {
+      stop("Additional prior gene table is missing `gene_symbol`: ",
+           priority_file, call. = FALSE)
+    }
+    genes
+  }), fill = TRUE)
   if (!"gene_symbol" %chin% names(genes)) {
     stop("Additional prior gene table is missing `gene_symbol`: ",
-         priority_file, call. = FALSE)
+         paste(priority_files, collapse = "; "), call. = FALSE)
   }
 
   sort(unique(resolve_dominant_state_gene_symbols(genes$gene_symbol)))

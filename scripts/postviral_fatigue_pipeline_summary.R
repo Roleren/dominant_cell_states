@@ -48,6 +48,7 @@ dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 dir.create(figure_dir, showWarnings = FALSE, recursive = TRUE)
 
 state_file <- file.path(analysis_dir, "human_dominant_cell_states_clean_cds.csv")
+activity_metadata_file <- file.path(analysis_dir, "human_dominant_state_activity_metadata.fst")
 if (!file.exists(state_file)) stop("Missing state file: ", state_file)
 
 message("Post-viral fatigue pipeline summary:")
@@ -319,6 +320,23 @@ if (!fatigue_state %chin% names(state_dt)) {
   stop("State file does not contain the fatigue score column: ", fatigue_state)
 }
 
+# Raw `dominant_state` argmax winner counts are not comparable across states
+# (see md/dominant_state_open_analysis_2026-09-24.md, Finding 1) -- OXPHOS
+# wins by construction while low-baseline-rate states like fatigue almost
+# never do, which would make `fatigue_winner_samples` below misleadingly
+# read as ~0. Use the calibrated, within-state-percentile winner instead.
+if (requireNamespace("fst", quietly = TRUE) && file.exists(activity_metadata_file)) {
+  act <- as.data.table(fst::read_fst(activity_metadata_file,
+                                     columns = c("Run", "dominant_state_top")))
+  setnames(act, "dominant_state_top", "dominant_state_calibrated")
+  state_dt[, input_order := .I]
+  state_dt <- merge(state_dt, act, by = "Run", all.x = TRUE, sort = FALSE)
+  setorder(state_dt, input_order)
+  state_dt[, input_order := NULL]
+} else {
+  state_dt[, dominant_state_calibrated := dominant_state]
+}
+
 sample_scores_file <- file.path(output_dir, "postviral_fatigue_sample_scores.csv")
 metadata_fields <- character()
 if (file.exists(metadata_file)) {
@@ -431,7 +449,7 @@ if (length(submodule_cols) > 0) {
   fwrite(submodule_summary, file.path(output_dir, "postviral_fatigue_submodule_summary.csv"))
 }
 
-winner_counts <- state_dt[, .N, by = dominant_state][order(-N)]
+winner_counts <- state_dt[, .N, by = .(dominant_state = dominant_state_calibrated)][order(-N)]
 score_summary <- rbindlist(lapply(score_cols, function(state) {
   x <- as.numeric(state_dt[[state]])
   data.table(
@@ -972,7 +990,7 @@ if (nrow(matched_cds) > 0) {
 candidate_rankings <- safe_fread(file.path(
   analysis_dir,
   "dominant_next_model",
-  "dominant_next_model_candidate_rankings_v4.csv"
+  "dominant_next_model_candidate_rankings.csv"
 ))
 if (nrow(matched_cds) > 0) {
   matched_viral_ifn_review <- matched_cds[
@@ -1001,10 +1019,10 @@ if (nrow(matched_cds) > 0) {
         .SD[1],
         by = .(gene_symbol, tx_id)
       ][, .(
-        gene_symbol, tx_id, candidate_rank_v4, novelty_class,
+        gene_symbol, tx_id, candidate_rank, novelty_class,
         known_uorf_regulation, manual_m_source_gene,
         has_overlapping_uorf, n_uorfs, n_overlapping_uorfs,
-        primary_clean_cds_usage, next_iteration_candidate_score_v4
+        primary_clean_cds_usage, candidate_score
       )]
       matched_viral_ifn_review <- merge(
         matched_viral_ifn_review,
@@ -1038,7 +1056,7 @@ if (nrow(matched_cds) > 0) {
       "matched_cds_support", "clean_cds_strict_support",
       "matched_feature_confidence_score", "matched_bootstrap_certainty_score",
       "matched_design_specificity", "matched_postviral_review_score",
-      "candidate_rank_v4", "novelty_class", "primary_clean_cds_usage",
+      "candidate_rank", "novelty_class", "primary_clean_cds_usage",
       "review_context", "matched_design_signature"
     )
     setcolorder(

@@ -255,7 +255,7 @@ feature_conf <- read_dt(
 )
 candidate <- read_dt(
   source_file("dominant_next_model",
-              "dominant_next_model_candidate_rankings_v4.csv")
+              "dominant_next_model_candidate_rankings.csv")
 )
 browser <- read_dt(
   source_file("dominant_next_model",
@@ -610,11 +610,11 @@ if (nrow(feature_conf)) {
 
 if (nrow(candidate)) {
   candidate_keep <- intersect(names(candidate), c(
-    "gene_symbol", "tx_id", "candidate_rank_v4", "novelty_class",
+    "gene_symbol", "tx_id", "candidate_rank", "novelty_class",
     "known_uorf_regulation", "manual_m_source_gene", "hidden_uorf_candidate",
     "has_overlapping_uorf", "n_uorfs", "n_overlapping_uorfs",
     "n_uorfs_with_m_support", "primary_clean_cds_usage",
-    "next_iteration_candidate_score_v4", "postviral_validation_score",
+    "candidate_score", "postviral_validation_score",
     "top_matched_postviral_family", "top_matched_postviral_condition",
     "top_matched_postviral_cds_pct", "postviral_design_evidence_class"
   ))
@@ -2704,7 +2704,7 @@ preferred_cols <- c(
   "postviral_gene_design_evidence_class",
   "postviral_loo_effect_direction_stable",
   "postviral_study_loo_effect_direction_stable",
-  "candidate_rank_v4", "novelty_class", "known_uorf_regulation",
+  "candidate_rank", "novelty_class", "known_uorf_regulation",
   "manual_m_source_gene", "hidden_uorf_candidate", "has_overlapping_uorf",
   "n_uorfs", "n_overlapping_uorfs", "n_uorfs_with_m_support",
   "primary_clean_cds_usage", "n_rdg_features", "n_measured_uorf_ouorf",

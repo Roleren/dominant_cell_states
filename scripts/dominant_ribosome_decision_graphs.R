@@ -25,10 +25,13 @@ analysis_dir <- if (file.exists("dominant_cell_states/dominant_uorf_feature_expr
 feature_expression_file <- file.path(analysis_dir, "dominant_uorf_feature_expression.csv")
 state_file <- file.path(analysis_dir, "human_dominant_cell_states_clean_cds.csv")
 diagnostics_file <- file.path(analysis_dir, "human_dominant_cell_states_clean_cds_gene_diagnostics.csv")
+source(file.path(analysis_dir, "scripts", "dominant_object_cache.R"), local = TRUE)
+source(file.path(analysis_dir, "scripts", "dominant_transcript_mapping.R"), local = TRUE)
 enrichment_file <- file.path(analysis_dir, "dominant_state_clean_cds_enrichment_all_main.csv")
 broad_rdg_terms_file <- file.path(analysis_dir, "dominant_state_broad_metadata_rdg_terms.csv")
 glmnet_rdg_terms_file <- file.path(analysis_dir, "dominant_state_glmnet_metadata_rdg_terms.csv")
 selected_fields_file <- file.path(analysis_dir, "dominant_state_broad_metadata_selected_fields.csv")
+activity_metadata_file <- file.path(analysis_dir, "human_dominant_state_activity_metadata.fst")
 metadata_file <- local({
   candidates <- c(
     Sys.getenv("DOMINANT_METADATA_FILE", unset = NA_character_),
@@ -185,7 +188,7 @@ range_positions <- function(grl) {
 safe_pmap_positions <- function(query, subject) {
   if (length(query) == 0 || length(subject) == 0) return(integer())
   mapped <- tryCatch(
-    suppressWarnings(pmapToTranscriptF(query, subject)),
+    suppressWarnings(dominant_checked_pmap(query, subject)),
     error = function(e) GRangesList()
   )
   range_positions(mapped)
@@ -205,9 +208,10 @@ make_display_region <- function(leader_tx, cds_tx, tx_id) {
 
 load_translon_source <- function(paths, source) {
   path <- unique(paths)
+  path <- unname(vapply(path, dominant_preferred_object_file, character(1)))
   path <- path[file.exists(path)][1]
   if (is.na(path)) return(GRangesList())
-  translons <- read_RDSQS(path)
+  translons <- dominant_read_external_object(path)
   mcols(translons)$translon_source <- source
   mcols(translons)$translon_source_path <- path
   translons
@@ -227,9 +231,9 @@ load_predicted_translons <- function(df) {
               "predicted_translons_ranges.qs")
   )
   m_paths <- c(
-    file.path(analysis_dir, "manual_translons", "manual_translons_ranges.rds"),
-    file.path("dominant_cell_states", "manual_translons", "manual_translons_ranges.rds"),
-    file.path("manual_translons", "manual_translons_ranges.rds")
+    file.path(analysis_dir, "manual_translons", "manual_translons_ranges.qs"),
+    file.path("dominant_cell_states", "manual_translons", "manual_translons_ranges.qs"),
+    file.path("manual_translons", "manual_translons_ranges.qs")
   )
   t <- load_translon_source(t_paths, "T")
   tc <- load_translon_source(tc_paths, "TC")
@@ -249,11 +253,11 @@ load_predicted_translons <- function(df) {
 
 collapse_to_tx_iranges <- function(mapped) {
   starts <- vapply(mapped, function(x) {
-    if (length(x) == 0) return(NA_integer_)
+    if (length(x) == 0) return(0L)
     min(start(x))
   }, integer(1))
   ends <- vapply(mapped, function(x) {
-    if (length(x) == 0) return(NA_integer_)
+    if (length(x) == 0) return(-1L)
     max(end(x))
   }, integer(1))
   IRanges(start = starts, end = ends)
@@ -269,9 +273,17 @@ annotate_translon_categories <- function(translons, cds, mrna) {
   }
   if (length(translons) == 0) return(translons)
 
-  mapped <- suppressWarnings(pmapToTranscriptF(translons, mrna[names(translons)]))
+  mapped <- suppressWarnings(dominant_checked_pmap(translons, mrna[names(translons)]))
   tx_iranges <- collapse_to_tx_iranges(mapped)
-  valid <- !is.na(start(tx_iranges)) & !is.na(end(tx_iranges))
+  valid <- !is.na(start(tx_iranges)) & !is.na(end(tx_iranges)) &
+    start(tx_iranges) >= 1L & end(tx_iranges) >= start(tx_iranges)
+  if (!all(valid)) {
+    warning("Dropping ", sum(!valid), " predicted translons with unmappable transcript ranges.")
+    translons <- translons[valid]
+    tx_iranges <- tx_iranges[valid]
+  }
+  if (!length(translons)) return(translons)
+  valid <- rep(TRUE, length(translons))
   categories <- rep(NA_character_, length(translons))
 
   if (any(valid)) {
@@ -612,11 +624,26 @@ build_feature_annotation_one <- function(df, translons, gene, tx_id) {
 
 build_feature_annotation <- function(df, translons, feature_dt) {
   tx_by_gene <- unique(feature_dt[, .(gene_symbol, tx_id)])
+  optimized <- ORFik:::optimized_txdb_path(df, stop.error = FALSE)
+  annotation_inputs <- dominant_input_files(c(df@txdb, df@fafile,
+    if (!is.null(optimized)) unlist(lapply(c("cds", "leaders"),
+      function(part) paste0(optimized, "_", part, c(".qs", ".rds"))))))
+  computation <- dominant_computation_signature(build_feature_annotation_one)
   rbindlist(lapply(seq_len(nrow(tx_by_gene)), function(i) {
     row <- tx_by_gene[i]
     message("Building RDG feature annotation for ", row$gene_symbol,
             " (", row$tx_id, ")")
-    build_feature_annotation_one(df, translons, row$gene_symbol, row$tx_id)
+    signature <- list(version = "rdg-annotation-v1",
+      orfik_version = dominant_orfik_cache_version(),
+      gene = row$gene_symbol, tx_id = row$tx_id,
+      annotations = annotation_inputs, computation = computation,
+      translons = translons[names(translons) == row$tx_id])
+    dominant_cached_object(
+      file.path(analysis_dir, "results", ".measurement_cache"),
+      paste0("rdg_annotation_", row$gene_symbol, "_", row$tx_id), signature,
+      function() build_feature_annotation_one(df, translons, row$gene_symbol, row$tx_id),
+      cacheable = function(value) !is.null(value) && nrow(value) > 0L &&
+        any(is.finite(value$frame_relative_to_cds)))
   }), fill = TRUE)
 }
 
@@ -744,6 +771,28 @@ build_sample_context <- function(state_dt, metadata_file) {
   } else {
     warning("Metadata file not found: ", metadata_file)
   }
+  # `dominant_state` is a raw argmax across per-state scores that are not on
+  # a comparable scale across states (see
+  # md/dominant_state_open_analysis_2026-09-24.md, Finding 1): OXPHOS wins
+  # ~63% of samples by construction while ISR/Interferon/Fatigue win almost
+  # never. Every "sample_dominant_call" RDG branch (one per state, built in
+  # build_branch_terms()) is matched against samples via this column
+  # (branch_runs(), field == "dominant_state_call"), so without calibration
+  # the OXPHOS branch is really just "the whole population" and the
+  # low-baseline-rate state branches are near-empty. Use the calibrated,
+  # within-state-percentile winner from dominant_state_activity_metadata_fst.R
+  # instead for that specific branch-matching purpose.
+  if (requireNamespace("fst", quietly = TRUE) && file.exists(activity_metadata_file)) {
+    act <- as.data.table(fst::read_fst(activity_metadata_file,
+                                       columns = c("Run", "dominant_state_top")))
+    setnames(act, "dominant_state_top", "dominant_state_calibrated")
+    context[, input_order := .I]
+    context <- merge(context, act, by = "Run", all.x = TRUE, sort = FALSE)
+    setorder(context, input_order)
+    context[, input_order := NULL]
+  } else {
+    context[, dominant_state_calibrated := dominant_state]
+  }
   context[]
 }
 
@@ -843,7 +892,7 @@ build_branch_terms <- function(state_dt, enrichment_file, broad_file = NULL,
 
 branch_runs <- function(context, branch) {
   if (branch$field == "dominant_state_call") {
-    in_branch <- context$dominant_state == branch$dominant_state
+    in_branch <- context$dominant_state_calibrated == branch$dominant_state
   } else if (grepl(":", branch$field, fixed = TRUE)) {
     values <- parse_conjunction_level(branch$field, branch$level)
     if (!all(names(values) %chin% names(context)) || anyNA(values)) {

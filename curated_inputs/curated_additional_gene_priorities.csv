@@ -1,0 +1,3 @@
+gene_symbol,priority_class,score_role,rationale,reference_url
+BOD1L1,replication_stress,analysis_only,"Replication-fork protection factor; prioritize clean-CDS and translon allocation analysis. Its function alone does not establish a signed proliferation or senescence marker.",https://pubmed.ncbi.nlm.nih.gov/26166705/
+FMR1,translation_regulation,analysis_only,"RNA-binding translation regulator; prioritize clean-CDS and translon allocation analysis. Translation and RNA-granule functions alone do not establish a signed ISR or TOP-program marker.",https://pubmed.ncbi.nlm.nih.gov/21784246/

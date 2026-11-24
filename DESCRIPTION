@@ -15,13 +15,20 @@ RoxygenNote: 7.3.2
 Depends:
     R (>= 4.2)
 Imports:
+    qs2,
     utils
 Suggests:
+    BiocParallel,
+    codetools,
     data.table,
+    digest,
     DT,
     GenomicRanges,
     IRanges,
+    ORFik,
     plotly,
     shiny,
-    testthat (>= 3.0.0)
+    S4Vectors,
+    testthat (>= 3.0.0),
+    withr
 Config/testthat/edition: 3

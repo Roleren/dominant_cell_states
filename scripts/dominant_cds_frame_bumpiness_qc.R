@@ -40,6 +40,7 @@ if (!file.exists(coverage_cache_file)) {
   stop("Missing dominant coverage cache helper: ", coverage_cache_file)
 }
 source(coverage_cache_file)
+source(file.path(analysis_dir, "scripts", "dominant_state_module_definitions.R"))
 
 message("CDS frame and bumpiness QC")
 message("  1. Load FST transcript coverage for all modeled marker CDSs")
@@ -50,10 +51,19 @@ message("  4. Compare CDS bumpiness against coverage depth and viral controls")
 target_genes <- c("RRM1", "MYC", "EGLN3", "DDIT3")
 candidate_genes <- c("RRM1", "MYC", "EGLN3")
 control_genes <- c("DDIT3")
-housekeeping_candidate_genes <- c(
-  "ACTB", "GAPDH", "HPRT1", "TBP", "PPIA", "UBC", "YWHAZ",
-  "EEF1A1", "PSMB4", "TPT1", "RPL27", "RPL30", "RPS18", "RPS27A"
-)
+# Read from the canonical Baseline module instead of keeping a second,
+# independently-maintained copy -- this list used to hardcode the pre-2026-09-25
+# 16-gene Baseline set (including B2M and UBC, both since removed from the
+# canonical module for showing negative cohesion with the rest of the
+# housekeeping panel; see
+# papers/METTL3's sibling note md/dominant_state_gene_set_revision_plan_2026-09-25.md
+# and md/dominant_state_gene_justifications/01_baseline_remove_B2M_UBC.md).
+# Sourcing the canonical module here means this QC script's own "housekeeping
+# candidate" comparison set updates automatically if the Baseline module is
+# revised again, instead of silently drifting out of sync.
+housekeeping_candidate_genes <- load_dominant_state_modules(
+  include_postviral = FALSE
+)[dominant_state == "Baseline (control)", up_genes[[1]]]
 metadata_file <- local({
   candidates <- c(
     Sys.getenv("DOMINANT_METADATA_FILE", unset = NA_character_),

@@ -344,7 +344,7 @@ postviral_file <- file.path(
 )
 candidate_file <- file.path(
   analysis_dir, "dominant_next_model",
-  "dominant_next_model_candidate_rankings_v4.csv"
+  "dominant_next_model_candidate_rankings.csv"
 )
 
 cds <- read_dt(cds_file, required = TRUE)
@@ -564,10 +564,10 @@ if (!"postviral_matched_gene_design_score" %in% names(gene_design)) {
 
 if (nrow(candidate)) {
   candidate_keep <- intersect(names(candidate), c(
-    "gene_symbol", "tx_id", "candidate_rank_v4", "novelty_class",
+    "gene_symbol", "tx_id", "candidate_rank", "novelty_class",
     "known_uorf_regulation", "manual_m_source_gene", "hidden_uorf_candidate",
     "has_overlapping_uorf", "n_uorfs", "n_overlapping_uorfs",
-    "n_uorfs_with_m_support", "next_iteration_candidate_score_v4"
+    "n_uorfs_with_m_support", "candidate_score"
   ))
   gene_design <- merge(
     gene_design,
@@ -1021,7 +1021,7 @@ preferred_gene_design <- c(
   "hierarchical_mechanistic_support_class",
   "postviral_matched_gene_design_score",
   "postviral_gene_design_evidence_class",
-  "candidate_rank_v4", "novelty_class", "known_uorf_regulation",
+  "candidate_rank", "novelty_class", "known_uorf_regulation",
   "manual_m_source_gene", "hidden_uorf_candidate", "has_overlapping_uorf",
   "n_uorfs", "n_overlapping_uorfs", "n_uorfs_with_m_support",
   "hierarchical_loo_rows", "hierarchical_loo_mae_log2fc",

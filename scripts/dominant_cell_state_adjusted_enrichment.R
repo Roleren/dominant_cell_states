@@ -29,6 +29,7 @@ dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
 result_file <- function(...) file.path(results_dir, ...)
 
 state_file <- result_file("human_dominant_cell_states_clean_cds.csv")
+activity_metadata_file <- result_file("human_dominant_state_activity_metadata.fst")
 metadata_file <- local({
   candidates <- c(
     Sys.getenv("DOMINANT_METADATA_FILE", unset = NA_character_),
@@ -146,8 +147,8 @@ enrich_one_field_adjusted <- function(dt, field, state_cols) {
       raw_delta <- mean(raw_score[in_level], na.rm = TRUE) -
         mean(raw_score[out_level], na.rm = TRUE)
 
-      call_in <- sum(dt$dominant_state[in_level] == state, na.rm = TRUE)
-      call_out <- sum(dt$dominant_state[out_level] == state, na.rm = TRUE)
+      call_in <- sum(dt$dominant_state_calibrated[in_level] == state, na.rm = TRUE)
+      call_out <- sum(dt$dominant_state_calibrated[out_level] == state, na.rm = TRUE)
       no_call_in <- n_in - call_in
       no_call_out <- n_out - call_out
       fisher <- safe_fisher_greater(call_in, no_call_in, call_out, no_call_out)
@@ -350,10 +351,31 @@ dt <- merge.data.table(dt, m, all.x = TRUE, sort = FALSE)
 setorder(dt, input_order)
 dt[, input_order := NULL]
 
+# `dominant_state` is a raw argmax across per-state scores that are not on a
+# comparable scale across states (see md/dominant_state_open_analysis_2026-09-24.md,
+# Finding 1) -- states built from intrinsically high-abundance marker genes
+# (OXPHOS) structurally out-score states built from low-abundance/conditionally
+# induced genes (ISR, Interferon, Post-viral fatigue) regardless of true
+# relative activation, which would make the "dominant call" enrichment/Fisher
+# test below meaningless for those low-baseline-rate states. Use the
+# calibrated, within-state-percentile winner already computed by
+# dominant_state_activity_metadata_fst.R instead.
+if (requireNamespace("fst", quietly = TRUE) && file.exists(activity_metadata_file)) {
+  act <- as.data.table(fst::read_fst(activity_metadata_file,
+                                     columns = c("Run", "dominant_state_top")))
+  setnames(act, "dominant_state_top", "dominant_state_calibrated")
+  dt[, input_order := .I]
+  dt <- merge(dt, act, by = "Run", all.x = TRUE, sort = FALSE)
+  setorder(dt, input_order)
+  dt[, input_order := NULL]
+} else {
+  dt[, dominant_state_calibrated := dominant_state]
+}
+
 state_cols <- setdiff(
   names(dt),
   c("Run", "sample", "dominant_state", "dominant_state_score",
-    "Baseline (control)", metadata_fields)
+    "dominant_state_calibrated", "Baseline (control)", metadata_fields)
 )
 
 all_main <- rbindlist(lapply(metadata_fields, function(field) {

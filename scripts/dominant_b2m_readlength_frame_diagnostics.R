@@ -1,3 +1,12 @@
+serialization_helper <- c(
+  file.path("scripts", "dominant_serialization.R"),
+  file.path("dominant_cell_states", "scripts", "dominant_serialization.R"),
+  file.path("..", "..", "scripts", "dominant_serialization.R")
+)
+serialization_helper <- serialization_helper[file.exists(serialization_helper)][1]
+if (is.na(serialization_helper)) stop("Missing dominant_serialization.R")
+source(serialization_helper, local = TRUE)
+
 #!/usr/bin/env Rscript
 
 suppressPackageStartupMessages({
@@ -49,8 +58,8 @@ target_runs <- data.table(
   BioProject = c("PRJNA285961", "PRJNA1062064"),
   bam_file = file.path(input_dir, c("SRR2052924.bam", "SRR27450688.bam")),
   shift_file = file.path(input_dir, c(
-    "PRJNA285961_shifting_tables.rds",
-    "PRJNA1062064_shifting_tables.rds"
+    "PRJNA285961_shifting_tables.qs",
+    "PRJNA1062064_shifting_tables.qs"
   ))
 )
 
@@ -119,7 +128,7 @@ make_display_region <- function(leader_tx, cds_tx, tx_id) {
 }
 
 load_shift_table_for_run <- function(shift_file, run) {
-  shift_list <- readRDS(shift_file)
+  shift_list <- dominant_read_object(shift_file)
   if (!is.list(shift_list)) {
     stop("Shift file is not a list: ", shift_file, call. = FALSE)
   }

@@ -87,9 +87,6 @@ buffering_all_output <- file.path(output_dir, "dominant_next_model_cds_buffering
 buffering_relevant_output <- file.path(output_dir, "dominant_next_model_cds_buffering_effect_sizes_relevant_rdgs.csv")
 buffering_condition_output <- file.path(output_dir, "dominant_next_model_cds_buffering_effect_sizes_condition_focus.csv")
 buffering_condition_representative_output <- file.path(output_dir, "dominant_next_model_cds_buffering_effect_sizes_condition_representative.csv")
-candidate_v2_output <- file.path(output_dir, "dominant_next_model_candidate_rankings_v2.csv")
-candidate_v3_output <- file.path(output_dir, "dominant_next_model_candidate_rankings_v3.csv")
-candidate_v4_output <- file.path(output_dir, "dominant_next_model_candidate_rankings_v4.csv")
 matched_feature_contrast_output <- file.path(
   output_dir,
   "dominant_next_model_matched_control_feature_contrasts.csv"
@@ -707,18 +704,6 @@ candidate <- candidate[, .(
   strongest_branch_feature, strongest_branch_feature_type,
   novel_candidate_score, structure_note, hidden_uorf_candidate_reason
 )]
-fwrite(candidate, candidate_output)
-
-novel <- candidate[
-  known_uorf_regulation == FALSE &
-    (manual_m_source_gene == TRUE |
-       hidden_uorf_candidate == TRUE |
-       has_overlapping_uorf == TRUE |
-       novel_candidate_score >= quantile(candidate$novel_candidate_score, 0.75, na.rm = TRUE))
-]
-setorder(novel, -novel_candidate_score, primary_clean_cds_usage)
-fwrite(novel, novel_output)
-
 buffering_effects <- data.table()
 buffering_relevant <- data.table()
 buffering_condition <- data.table()
@@ -2028,7 +2013,7 @@ if (nrow(matched_cds_buffering) > 0) {
 }
 fwrite(generic_condition_evidence, generic_condition_evidence_output)
 
-candidate_v2 <- copy(candidate)
+candidate_current <- copy(candidate)
 buffering_gene_summary <- data.table()
 if (nrow(buffering_effects) > 0) {
   buffering_gene_summary <- buffering_effects[
@@ -2059,10 +2044,10 @@ if (nrow(buffering_effects) > 0) {
     by = .(gene_symbol, tx_id)
   ]
 }
-candidate_v2 <- merge(candidate_v2, buffering_gene_summary,
+candidate_current <- merge(candidate_current, buffering_gene_summary,
                       by = c("gene_symbol", "tx_id"), all.x = TRUE, sort = FALSE)
 if (nrow(matched_gene_summary) > 0) {
-  candidate_v2 <- merge(candidate_v2, matched_gene_summary,
+  candidate_current <- merge(candidate_current, matched_gene_summary,
                         by = c("gene_symbol", "tx_id"), all.x = TRUE, sort = FALSE)
 }
 for (col in c(
@@ -2080,75 +2065,61 @@ for (col in c(
   "max_supported_design_specificity",
   "max_supported_design_supported_gene_count"
 )) {
-  if (!col %chin% names(candidate_v2)) candidate_v2[, (col) := 0]
-  candidate_v2[is.na(get(col)) | !is.finite(get(col)), (col) := 0]
+  if (!col %chin% names(candidate_current)) candidate_current[, (col) := 0]
+  candidate_current[is.na(get(col)) | !is.finite(get(col)), (col) := 0]
 }
-candidate_v2[, preliminary_candidate_rank := candidate_rank]
-candidate_v2[, buffering_effect_component := norm01(max_abs_cds_fpkm_change_pct_stabilized)]
-candidate_v2[, buffering_confidence_component_v2 := pmin(pmax(max_buffering_confidence_score, 0), 1)]
-candidate_v2[, direct_control_component := pmin(n_direct_control_buffering_rows, 1)]
-candidate_v2[, supported_control_component := pmin(n_supported_control_buffering_rows, 1)]
+candidate_current[, preliminary_candidate_rank := candidate_rank]
+candidate_current[, buffering_effect_component := norm01(max_abs_cds_fpkm_change_pct_stabilized)]
+candidate_current[, buffering_confidence_component := pmin(pmax(max_buffering_confidence_score, 0), 1)]
+candidate_current[, direct_control_component := pmin(n_direct_control_buffering_rows, 1)]
+candidate_current[, supported_control_component := pmin(n_supported_control_buffering_rows, 1)]
 for (component_col in c(
-  "buffering_effect_component", "buffering_confidence_component_v2",
+  "buffering_effect_component", "buffering_confidence_component",
   "direct_control_component", "supported_control_component"
 )) {
-  candidate_v2[!is.finite(get(component_col)), (component_col) := 0]
+  candidate_current[!is.finite(get(component_col)), (component_col) := 0]
 }
-candidate_v2[, next_iteration_candidate_score :=
+candidate_current[, candidate_score :=
                novel_candidate_score +
                0.75 * buffering_effect_component +
-               0.65 * buffering_confidence_component_v2 +
+               0.65 * buffering_confidence_component +
                0.40 * direct_control_component +
                0.30 * supported_control_component]
-candidate_v2[, next_iteration_candidate_score_v2 := next_iteration_candidate_score]
-setorder(candidate_v2, -next_iteration_candidate_score, primary_clean_cds_usage)
-candidate_v2[, candidate_rank_v2 := seq_len(.N)]
-safe_setcolorder(candidate_v2, c("candidate_rank_v2", "preliminary_candidate_rank"))
-candidate_v2_ranked <- copy(candidate_v2)
-fwrite(candidate_v2_ranked, candidate_v2_output)
+setorder(candidate_current, -candidate_score, primary_clean_cds_usage)
 
-candidate_v3 <- copy(candidate_v2_ranked)
-candidate_v3[, matched_control_effect_component :=
+candidate_current[, matched_control_effect_component :=
                norm01(max_abs_matched_control_cds_fpkm_change_pct_stabilized)]
-candidate_v3[, matched_control_relative_component :=
+candidate_current[, matched_control_relative_component :=
                norm01(max_abs_matched_control_clean_cds_relative_use_delta)]
-candidate_v3[, matched_control_confidence_component :=
+candidate_current[, matched_control_confidence_component :=
                pmin(pmax(max_matched_control_confidence_score, 0), 1)]
-candidate_v3[, matched_supported_control_component :=
+candidate_current[, matched_supported_control_component :=
                pmin(n_supported_matched_control_cds_rows, 1)]
 for (component_col in c(
   "matched_control_effect_component", "matched_control_relative_component",
   "matched_control_confidence_component", "matched_supported_control_component"
 )) {
-  candidate_v3[!is.finite(get(component_col)), (component_col) := 0]
+  candidate_current[!is.finite(get(component_col)), (component_col) := 0]
 }
-candidate_v3[, next_iteration_candidate_score_v3 :=
-               next_iteration_candidate_score_v2 +
+candidate_current[, candidate_score :=
+               candidate_score +
                0.55 * matched_control_effect_component +
                0.45 * matched_control_relative_component +
                0.55 * matched_control_confidence_component +
                0.45 * matched_supported_control_component]
-candidate_v3[, next_iteration_candidate_score := next_iteration_candidate_score_v3]
-setorder(candidate_v3, -next_iteration_candidate_score_v3, primary_clean_cds_usage)
-candidate_v3[, candidate_rank_v3 := seq_len(.N)]
-safe_setcolorder(
-  candidate_v3,
-  c("candidate_rank_v3", "candidate_rank_v2", "preliminary_candidate_rank")
-)
-fwrite(candidate_v3, candidate_v3_output)
+setorder(candidate_current, -candidate_score, primary_clean_cds_usage)
 
-candidate_v4 <- copy(candidate_v3)
-candidate_v4[, design_replication_component :=
+candidate_current[, design_replication_component :=
                pmin(1, log1p(n_supported_matched_control_designs) / log1p(3))]
-candidate_v4[, study_replication_component :=
+candidate_current[, study_replication_component :=
                pmin(1, log1p(n_supported_matched_control_studies) / log1p(2))]
-candidate_v4[, design_specificity_component :=
+candidate_current[, design_specificity_component :=
                pmin(pmax(max_supported_design_specificity, 0), 1)]
-candidate_v4[, bootstrap_certainty_component :=
+candidate_current[, bootstrap_certainty_component :=
                pmin(pmax(max_matched_control_bootstrap_certainty_score, 0), 1)]
-candidate_v4[, shrunk_matched_effect_component :=
+candidate_current[, shrunk_matched_effect_component :=
                norm01(max_abs_shrunk_matched_control_fpkm_log2_fc)]
-candidate_v4[, broad_single_design_penalty := fifelse(
+candidate_current[, broad_single_design_penalty := fifelse(
   n_supported_matched_control_designs <= 1 &
     max_supported_design_supported_gene_count >= 10,
   0.35,
@@ -2159,38 +2130,29 @@ for (component_col in c(
   "design_specificity_component", "bootstrap_certainty_component",
   "shrunk_matched_effect_component", "broad_single_design_penalty"
 )) {
-  candidate_v4[!is.finite(get(component_col)), (component_col) := 0]
+  candidate_current[!is.finite(get(component_col)), (component_col) := 0]
 }
-candidate_v4[, next_iteration_candidate_score_v4 :=
-               next_iteration_candidate_score_v3 +
+candidate_current[, candidate_score :=
+               candidate_score +
                0.45 * design_replication_component +
                0.30 * study_replication_component +
                0.35 * design_specificity_component +
                0.35 * bootstrap_certainty_component +
                0.30 * shrunk_matched_effect_component -
                broad_single_design_penalty]
-candidate_v4[, next_iteration_candidate_score := next_iteration_candidate_score_v4]
-setorder(candidate_v4, -next_iteration_candidate_score_v4, primary_clean_cds_usage)
-candidate_v4[, candidate_rank_v4 := seq_len(.N)]
-candidate_v4[, candidate_rank := candidate_rank_v4]
-safe_setcolorder(
-  candidate_v4,
-  c("candidate_rank_v4", "candidate_rank",
-    "candidate_rank_v3",
-    "candidate_rank_v2", "preliminary_candidate_rank")
-)
-candidate_v2 <- candidate_v4
+setorder(candidate_current, -candidate_score, primary_clean_cds_usage)
+candidate_current[, candidate_rank := seq_len(.N)]
+safe_setcolorder(candidate_current, c("candidate_rank", "preliminary_candidate_rank"))
 
-novel <- candidate_v2[
+novel <- candidate_current[
   known_uorf_regulation == FALSE &
     (manual_m_source_gene == TRUE |
        hidden_uorf_candidate == TRUE |
        has_overlapping_uorf == TRUE |
-       next_iteration_candidate_score >= quantile(next_iteration_candidate_score, 0.75, na.rm = TRUE))
+       candidate_score >= quantile(candidate_score, 0.75, na.rm = TRUE))
 ]
-setorder(novel, -next_iteration_candidate_score, primary_clean_cds_usage)
-fwrite(candidate_v2, candidate_output)
-fwrite(candidate_v2, candidate_v4_output)
+setorder(novel, -candidate_score, primary_clean_cds_usage)
+fwrite(candidate_current, candidate_output)
 fwrite(novel, novel_output)
 
 internal_orf_initiation_evidence <- data.table()
@@ -2509,9 +2471,9 @@ if (nrow(internal_orf_architecture) > 0) {
   )
   internal_orf_architecture <- merge(
     internal_orf_architecture,
-    candidate_v2[, .(
-      gene_symbol, tx_id, candidate_rank_v4, novelty_class,
-      primary_clean_cds_usage, next_iteration_candidate_score_v4,
+    candidate_current[, .(
+      gene_symbol, tx_id, candidate_rank, novelty_class,
+      primary_clean_cds_usage, candidate_score,
       n_uorfs, n_overlapping_uorfs, has_overlapping_uorf
     )],
     by = c("gene_symbol", "tx_id"),
@@ -2656,7 +2618,7 @@ if (nrow(internal_orf_architecture) > 0) {
     )
   )]
   internal_orf_architecture[, candidate_score_component :=
-                              norm01(next_iteration_candidate_score_v4)]
+                              norm01(candidate_score)]
   internal_orf_architecture[!is.finite(candidate_score_component),
                             candidate_score_component := 0]
   internal_orf_architecture[, internal_orf_priority_score :=
@@ -2670,7 +2632,7 @@ if (nrow(internal_orf_architecture) > 0) {
   setorder(
     internal_orf_architecture,
     -internal_orf_priority_score,
-    candidate_rank_v4,
+    candidate_rank,
     gene_symbol,
     feature_order
   )
@@ -2679,7 +2641,7 @@ if (nrow(internal_orf_architecture) > 0) {
     c(
       "gene_symbol", "tx_id", "feature_id", "internal_orf_architecture_class",
       "internal_orf_priority_score", "internal_orf_evidence_score",
-      "candidate_rank_v4", "novelty_class", "feature_type", "category",
+      "candidate_rank", "novelty_class", "feature_type", "category",
       "tx_start", "tx_end", "feature_bases", "cds_overlap_bases",
       "start_codon", "start_codon_class", "kozak_strength",
       "frame_relative_to_cds", "peptide_length_aa",
@@ -2925,9 +2887,9 @@ safe_setcolorder(
 fwrite(feature_confidence, feature_confidence_output)
 
 browser_review_handoff <- data.table()
-if (nrow(candidate_v2) > 0) {
+if (nrow(candidate_current) > 0) {
   browser_review_handoff <- copy(
-    candidate_v2[seq_len(min(nrow(candidate_v2), 80L))]
+    candidate_current[seq_len(min(nrow(candidate_current), 80L))]
   )
   browser_review_handoff[, review_feature_id := fifelse(
     !is.na(strongest_branch_feature) & nzchar(strongest_branch_feature),
@@ -3096,7 +3058,7 @@ if (nrow(candidate_v2) > 0) {
     default = "Inspect RDG topology, matched controls, and browser coverage before mechanistic interpretation."
   )]
   browser_review_handoff[, browser_review_priority_score :=
-                            next_iteration_candidate_score_v4 +
+                            candidate_score +
                             fifelse(
                               is.finite(review_branch_abs_delta_relative_translation),
                               review_branch_abs_delta_relative_translation,
@@ -3115,10 +3077,10 @@ if (nrow(candidate_v2) > 0) {
       "browser_review_rank", "gene_symbol", "tx_id", "review_feature_id",
       "review_feature_type", "review_reason", "browser_review_question",
       "review_feature_measurement_class", "review_transcript_qc_class",
-      "candidate_rank_v4", "novelty_class", "known_uorf_regulation",
+      "candidate_rank", "novelty_class", "known_uorf_regulation",
       "manual_m_source_gene", "has_overlapping_uorf", "n_uorfs",
       "n_overlapping_uorfs", "primary_clean_cds_usage",
-      "next_iteration_candidate_score_v4", "review_tx_start",
+      "candidate_score", "review_tx_start",
       "review_tx_end", "review_feature_bases",
       "review_cds_overlap_bases", "review_translon_sources",
       "review_start_codon", "review_start_codon_class",
@@ -3215,13 +3177,13 @@ if (nrow(state_dt) > 0) {
 }
 fwrite(latent_reductions, latent_output)
 
-top_candidate_plot <- candidate_v2[is.finite(next_iteration_candidate_score)]
+top_candidate_plot <- candidate_current[is.finite(candidate_score)]
 top_candidate_plot <- top_candidate_plot[seq_len(min(nrow(top_candidate_plot), 25L))]
 if (nrow(top_candidate_plot) > 0) {
   top_candidate_plot[, gene_symbol := factor(gene_symbol, levels = rev(gene_symbol))]
   p_rank <- ggplot(
     top_candidate_plot,
-    aes(next_iteration_candidate_score, gene_symbol, fill = novelty_class)
+    aes(candidate_score, gene_symbol, fill = novelty_class)
   ) +
     geom_col(width = 0.72) +
     geom_text(
@@ -3237,14 +3199,14 @@ if (nrow(top_candidate_plot) > 0) {
       "predicted-overlap candidate" = "#2166ac",
       "structure-associated candidate" = "#4d9221"
     )) +
-    coord_cartesian(xlim = c(0, max(top_candidate_plot$next_iteration_candidate_score, na.rm = TRUE) * 1.16)) +
+    coord_cartesian(xlim = c(0, max(top_candidate_plot$candidate_score, na.rm = TRUE) * 1.16)) +
     labs(
       title = "Next-model candidate ranking",
       subtitle = paste(
         "Score combines low clean-CDS use, branch shifts, allocation effects,",
         "buffering evidence, matched-control support, and known-uORF status."
       ),
-      x = "Next-iteration candidate score",
+      x = "Candidate priority score",
       y = NULL,
       fill = NULL
     ) +
@@ -3259,7 +3221,7 @@ if (nrow(top_candidate_plot) > 0) {
   write_plot(p_rank, "next_model_candidate_ranking", width = 9.2, height = 7.2)
 }
 
-scatter_input <- candidate_v2[
+scatter_input <- candidate_current[
   is.finite(primary_clean_cds_usage) & is.finite(max_abs_branch_delta)
 ]
 if (nrow(scatter_input) > 0) {
@@ -3270,7 +3232,7 @@ if (nrow(scatter_input) > 0) {
   ) +
     geom_point(alpha = 0.82) +
     geom_text(
-      data = scatter_input[next_iteration_candidate_score >= quantile(next_iteration_candidate_score, 0.80, na.rm = TRUE)],
+      data = scatter_input[candidate_score >= quantile(candidate_score, 0.80, na.rm = TRUE)],
       aes(label = gene_symbol),
       hjust = -0.08,
       vjust = 0.45,
@@ -3311,7 +3273,7 @@ flow_plot <- flow[
     feature_type %chin% c("overlapping_uorf", "internal_orf", "clean_CDS")
 ]
 if (nrow(flow_plot) > 0) {
-  candidate_genes <- candidate_v2[seq_len(min(nrow(candidate_v2), 12L)), gene_symbol]
+  candidate_genes <- candidate_current[seq_len(min(nrow(candidate_current), 12L)), gene_symbol]
   selected_branch_pairs <- data.table()
   if (nrow(compact_edges) > 0 &&
       all(c("gene_symbol", "branch_id", "abs_delta_relative_translation") %chin% names(compact_edges))) {
@@ -3432,12 +3394,12 @@ if (nrow(buffering_condition) > 0 || nrow(buffering_condition_representative) > 
   }
   buffer_plot <- merge(
     buffer_plot,
-    candidate_v2[, .(gene_symbol, tx_id, candidate_rank_v2)],
+    candidate_current[, .(gene_symbol, tx_id, candidate_rank_plot = candidate_rank)],
     by = c("gene_symbol", "tx_id"),
     all.x = TRUE,
     sort = FALSE
   )
-  buffer_plot[, candidate_rank_plot := fifelse(is.finite(candidate_rank_v2), candidate_rank_v2, 1e9)]
+  buffer_plot[, candidate_rank_plot := fifelse(is.finite(candidate_rank_plot), candidate_rank_plot, 1e9)]
   setorder(buffer_plot, candidate_rank_plot, -buffering_confidence_score,
            -abs_cds_fpkm_change_pct_stabilized)
   keep_genes <- unique(buffer_plot$gene_symbol)[seq_len(min(uniqueN(buffer_plot$gene_symbol), 14L))]
@@ -3668,10 +3630,10 @@ if (nrow(internal_orf_initiation_evidence) > 0) {
 }
 
 summary_rows <- list(
-  data.table(metric = "genes_ranked", value = nrow(candidate_v2)),
-  data.table(metric = "known_uorf_benchmarks_in_marker_panel", value = sum(candidate_v2$known_uorf_regulation, na.rm = TRUE)),
-  data.table(metric = "manual_m_source_genes", value = sum(candidate_v2$manual_m_source_gene, na.rm = TRUE)),
-  data.table(metric = "overlapping_uorf_genes", value = sum(candidate_v2$has_overlapping_uorf, na.rm = TRUE)),
+  data.table(metric = "genes_ranked", value = nrow(candidate_current)),
+  data.table(metric = "known_uorf_benchmarks_in_marker_panel", value = sum(candidate_current$known_uorf_regulation, na.rm = TRUE)),
+  data.table(metric = "manual_m_source_genes", value = sum(candidate_current$manual_m_source_gene, na.rm = TRUE)),
+  data.table(metric = "overlapping_uorf_genes", value = sum(candidate_current$has_overlapping_uorf, na.rm = TRUE)),
   data.table(metric = "novel_candidate_rows", value = nrow(novel)),
   data.table(metric = "compact_branch_edge_rows", value = nrow(compact_edges)),
   data.table(metric = "rdg_flow_rows", value = nrow(flow)),
@@ -3773,8 +3735,5 @@ message("Saved: ", internal_orf_matched_bump_output)
 message("Saved: ", internal_orf_initiation_output)
 message("Saved: ", internal_orf_architecture_output)
 message("Saved: ", browser_review_handoff_output)
-message("Saved: ", candidate_v2_output)
-message("Saved: ", candidate_v3_output)
-message("Saved: ", candidate_v4_output)
-message("Top next-iteration candidates: ",
-        paste(head(candidate_v2$gene_symbol, 8L), collapse = ", "))
+message("Top candidates: ",
+        paste(head(candidate_current$gene_symbol, 8L), collapse = ", "))

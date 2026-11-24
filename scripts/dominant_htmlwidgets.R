@@ -2,12 +2,12 @@ dominant_find_analysis_dir <- function(start = getwd()) {
   here <- normalizePath(start, mustWork = TRUE)
   repeat {
     if (file.exists(file.path(here, "scripts", "run_dominant_cell_state_pipeline.R")) &&
-        file.exists(file.path(here, "scripts", "dominant_cell_states.R"))) {
+        file.exists(file.path(here, "scripts", "dominant_cell_states_fst_clean_cds.R"))) {
       return(here)
     }
     if (basename(here) == "scripts" &&
         file.exists(file.path(here, "run_dominant_cell_state_pipeline.R")) &&
-        file.exists(file.path(here, "dominant_cell_states.R"))) {
+        file.exists(file.path(here, "dominant_cell_states_fst_clean_cds.R"))) {
       return(dirname(here))
     }
     candidate <- file.path(here, "dominant_cell_states")

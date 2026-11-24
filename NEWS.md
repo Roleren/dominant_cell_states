@@ -2,6 +2,114 @@
 
 This file records implementation history, motivation for pipeline changes, and iteration-level notes. The scientific interpretation now lives in `md/dominant_cell_state_scientific_note.md`.
 
+## 2026-10-10: ORFik mapping core and object bindings
+
+- Move paired mapping preparation, validation, interval merging and output
+  construction into local ORFik C++ bindings, with a reusable R-independent core.
+- Benchmark full calls and Rcpp/pointer/owned-array representations; verify
+  output schemas, input immutability and dominant-cell-states integration.
+- Keep the runner, pre-refactor baselines and findings in the ORFik repository
+  under `benchmark/transcript_mapping/`.
+
+## 2026-10-10: ORFik accessor and native mapping audit
+
+- Benchmark direct compressed-list access and paired transcript mapping against
+  independent original native code, with matched optimized compiler settings.
+- Install bounded native mapping, direct strand extraction and adaptive
+  large-list group accessors in local ORFik; add mapping regression tests.
+- Document per-input gains, small-input costs and remaining wrapper overhead in
+  `md/orfik_accessor_mapping_performance_2026-10-10.md`.
+
+## 2026-10-09: ORFik function benchmarks
+
+- Benchmark indexed transcript retrieval and coverage-table conversion against
+  saved original functions on real ATF4/FMR1/BOD1L1 inputs and a diverse gene panel.
+- Implement and install verified ORFik page-read batching and direct positive-run
+  expansion, with regression tests in the ORFik repository and exact track checks.
+- Preserve the dense table path and existing cache/version policy; reject
+  unconvincing extraction and dense-output experiments.
+- Save per-input timings, profiling evidence and remaining bottlenecks in
+  `md/orfik_function_performance_2026-10-09.md`.
+
+## 2026-10-09: Observatory link compatibility
+
+- Use the local RiboCrypt URL codec for app and generated review links.
+- Remove empty All merged restore guards that conflict with exact-cohort
+  autostart; select a populated group and retain case/control membership.
+- Normalize older stored links at app startup, including review and
+  partial-pooling links. Missing cohorts open without automatic full-collection plotting.
+- Add regression checks against the current backend parser and autostart readiness.
+
+## 2026-10-09: internal noise removal comparison
+
+- Added an optional comparison step for tracks from an internal noise removal model (not included in this repository); observed-count models keep their original inputs.
+
+## 2026-10-09: qs2 serialization migration
+
+- Migrate project-owned R objects from RDS to qs2 `.qs`, including coverage,
+  per-gene measurement, pipeline-manifest, manual-range, calibration and shift caches.
+- Use atomic saves and four threads by default; `DOMINANT_QS_THREADS` overrides it.
+- Preserve external ORFik inputs and prefer current QS siblings while retaining RDS
+  compatibility; watch both input paths for invalidation.
+- Verify conversion round trips, retain local recovery copies, and rebase only
+  serialization metadata from previously valid cache manifests.
+- Save the real-transcript thread benchmark under
+  `results/serialization_benchmark_2026-10-09/` and migration audit under
+  `results/qs2_migration_2026-10-09/`.
+
+## 2026-10-09: incremental caching and performance review
+
+- Added incremental per-gene transcript-selection and clean-CDS/uORF measurement
+  caches and RDG sequence-annotation caches, plus a separate discovered-manual-ORF
+  activity cache.
+- Track megafst index, experiment, library-size, annotation, and applicable count
+  inputs in pipeline cache dependencies; report the files responsible for misses.
+- Scope helper dependencies, preserve caches across identical table rewrites,
+  detect changed outputs, and exclude suppressed figures in table mode.
+- Consolidated candidate ranking into one current table and score/rank schema;
+  retired intermediate v2/v3/v4 exports and updated active consumers.
+- Guard transcript mapping against unmappable ranges before native mapping;
+  exclude malformed coordinate artifacts deterministically.
+- Bound default data.table threads at four after a real-output equivalence
+  benchmark; allow `DOMINANT_DT_THREADS` overrides.
+- Added reproducible incremental measurement benchmarks and saved performance
+  findings under `md/dominant_state_pipeline_performance_2026-10-09.md`.
+
+## 2026-10-08: BOD1L1 and FMR1 additional gene priorities
+
+- Added a tracked additional-priority input containing BOD1L1 and FMR1.
+- The target loader combines tracked priorities with any legacy local file;
+  both paths are declared dependencies of FST discovery and clean-CDS scoring.
+- Kept both genes outside scored state modules: their known replication-fork
+  and translation-regulatory roles justify analysis but do not establish
+  directional state-marker behavior.
+- Added a focused test for combining priority inputs without altering scored
+  module membership. The target panel now contains 129 genes.
+- Module rationale and references are in
+  `md/bod1l1_fmr1_priority_review_2026-10-08.md`.
+- Incorporated the user's subsequent manual BOD1L1/FMR1 queue additions.
+  Manual lookup now retains measured transcript selections and uses a unique
+  canonical-annotation fallback for genes outside the measured panel, rejecting
+  ambiguous mappings. This also resolves the existing IFIT2/ZNFX1/PELO/HK2
+  queue blockage without dropping entries.
+- Corrected the manual producer, readers and declared outputs to consistently
+  use `results/manual_translons/`. All 74 package checks pass.
+- Completed all 50 core/RDG steps with the refreshed manual features: 129
+  measured genes and 1,148 atlas cards across 82 genes. All 3,857 sample
+  state-score rows remain identical. FMR1 has a measurement-limited merged
+  redistribution review candidate; BOD1L1 remains a general atlas review.
+- Recorded FMR1 start-coordinate uncertainty and broader integration-check
+  limitations in the gene-priority review note.
+- Corrected the FMR1 overlapping-uORF start to tx 110 on ENST00000370475
+  following the user's clarification: CTG–TAA at 110–322, 213 bases,
+  with no internal in-frame stops. The leader starts remain 18 (CTC) and
+  40 (GTG); the position-18 boundary remains a separate initiation caveat.
+- Completed the superseding 50-step core/RDG rerun with start 110. The
+  annotation and measurements contain the corrected 213-base feature;
+  all 3,857 state-score rows and the 61-base FMR1 CDS mask remain unchanged.
+  The starvation transport direction is now robust, while the single
+  merged DNA-damage/senescence candidate remains measurement-limited.
+
 ## 2026-08-19: raw tRNA gate, manuscript, and laboratory triage
 
 Motivation: the EIF4G2 candidate still required raw reconstruction of the
@@ -2486,3 +2594,9 @@ Result:
 - Integrate lab translon prediction and noise-removed p-shifted coverage before promoting iORF or downstream-TIS claims.
 - Make counterfactual CDS-buffering predictions queryable with uncertainty and nearest observed designs.
 - Keep post-viral/viral infection as the main biological demonstration, but avoid disease-specific claims until matched cohorts or stronger metadata support exist.
+
+### Optional internal noise removal tracks
+
+- Added optional hooks for tracks from an internal noise removal model (not included in this repository), cached per gene and kept separate from observed counts.
+
+- Fixed source-only Rscript calls launching the pipeline CLI; added a regression check. Canonicalized signature row labels, enabled table-only reuse of full-output caches, and removed rendered assets from analytical dependencies. Final package checks passed 171 assertions; all 61 default-scope steps reused caches.

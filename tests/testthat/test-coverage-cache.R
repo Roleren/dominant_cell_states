@@ -65,3 +65,18 @@ test_that("coverage cache reuses transcript windows until index signature change
   expect_identical(calls, 2L)
   expect_identical(first, third)
 })
+
+test_that("index rebuild invalidates cached coverage even at identical file size", {
+  suppressPackageStartupMessages(library(GenomicRanges))
+  source(file.path(dcs_project_root(), "scripts", "dominant_coverage_cache.R"))
+  tmp <- tempfile(); dir.create(tmp); on.exit(unlink(tmp, recursive = TRUE))
+  index <- file.path(tmp, "coverage_index.fst"); writeLines("same-size", index)
+  display <- GRangesList(TX = GRanges("chr1", IRanges(1, 3), strand = "+"))
+  calls <- 0L
+  reader <- function(...) { calls <<- calls + 1L; list(matrix(calls, 3, 1)) }
+  get <- function() dominant_cached_coverage_by_transcript(display, index, "GENE", "TX", tmp, reader)
+  first <- get(); expect_identical(get(), first)
+  Sys.setFileTime(index, Sys.time() + 100)
+  expect_false(identical(get(), first))
+  expect_identical(calls, 2L)
+})

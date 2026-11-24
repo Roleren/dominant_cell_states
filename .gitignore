@@ -39,7 +39,7 @@ results/
 /manual_translons/manual_translon_candidates.csv
 /manual_translons/manual_translon_requested_gene_uoorf_candidates.csv
 /manual_translons/manual_translons_manifest.csv
-/manual_translons/manual_translons_ranges.rds
+/manual_translons/manual_translons_ranges.qs
 
 *.rds
 *.RData
@@ -53,9 +53,17 @@ results/
 
 # Rebuilt locally from the manuscript Markdown sources for Google Docs or
 # submission review. Keep the editable source, not binary exports, in Git.
-/manuscript/generated/
+/papers/EIF4G2/generated/
 
 # Local editor/system files.
 .Rhistory
 .RDataTmp
 .DS_Store
+
+*.qs
+
+# Manuscript drafts and paper notes: local only, never on GitHub
+/papers/
+/manuscript/
+/scripts/build_eif4g2_manuscript.sh
+/scripts/validate_eif4g2_manuscript.R

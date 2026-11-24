@@ -24,6 +24,7 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
 }
 
 analysis_dir <- if (dir.exists("dominant_cell_states")) "dominant_cell_states" else "."
+source(file.path(analysis_dir, "scripts", "dominant_observatory_urls.R"), local = TRUE)
 output_dir <- file.path(analysis_dir, "dominant_rdg_review_links")
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
@@ -102,43 +103,9 @@ split_condition_values <- function(x) {
   unique(out[is_informative(out)])
 }
 
-compact_selections <- function(selections) {
-  ids <- as.character(selections$index %||% names(selections$plot_selections))
-  if (!length(ids)) ids <- "3"
-  plot_sel <- selections$plot_selections %||% list()
-  data_sel <- selections$data_table_selections %||% list()
-  labels <- selections$labels %||% list()
-  active <- as.character(selections$active_selection_id %||% ids[1])
-  if (!active %in% ids) active <- ids[1]
-
-  all_runs <- unique(unlist(c(plot_sel[ids], data_sel[ids]), use.names = FALSE))
-  all_runs <- clean_text(all_runs)
-  all_runs <- all_runs[is_informative(all_runs)]
-  run_to_idx <- stats::setNames(seq_along(all_runs), all_runs)
-
-  encode_idx <- function(x) {
-    x <- clean_text(x)
-    x <- x[is_informative(x)]
-    if (!length(x)) return(integer())
-    as.integer(run_to_idx[x])
-  }
-
-  list(
-    active = active,
-    order = ids,
-    labels = stats::setNames(lapply(ids, function(id) {
-      as.character(labels[[id]] %||% "")
-    }), ids),
-    runs = all_runs,
-    p = stats::setNames(lapply(ids, function(id) encode_idx(plot_sel[[id]])), ids),
-    d = stats::setNames(lapply(ids, function(id) encode_idx(data_sel[[id]])), ids)
-  )
-}
-
 observatory_state <- function(gene_label, tx_id, selections) {
-  list(
-    v = 1L,
-    exp = "all_samples-Homo_sapiens",
+  dominant_observatory_state_from_inputs(
+    selected_experiment = "all_samples-Homo_sapiens",
     color_by = c("tissue", "cell_line"),
     view = "browser",
     browser = list(
@@ -157,17 +124,8 @@ observatory_state <- function(gene_label, tx_id, selections) {
       customSequence = "",
       go = TRUE
     ),
-    selections = compact_selections(selections)
+    selections = selections
   )
-}
-
-state_param <- function(state) {
-  json <- jsonlite::toJSON(state, auto_unbox = TRUE, null = "null")
-  compressed <- memCompress(charToRaw(json), type = "gzip")
-  encoded <- jsonlite::base64_enc(compressed)
-  encoded <- gsub("[\r\n]", "", encoded)
-  encoded <- chartr("+/", "-_", encoded)
-  sub("=+$", "", encoded)
 }
 
 load_metadata <- function(path) {
@@ -355,13 +313,12 @@ make_link_row <- function(row, metadata, gene_labels) {
     labels[[case_id]] <- paste0("Case: ", subset$case_condition)
   }
 
-  # Keep an empty third selection as a compatibility guard for the current
-  # Observatory URL restore behavior, where the final populated group can be
-  # lost. It also gives a visible all-merged comparison slot.
-  ids <- unique(c(ids, "3"))
-  plot_selections[["3"]] <- character()
-  data_table_selections[["3"]] <- character()
-  labels[["3"]] <- "All merged"
+  if (!length(ids)) {
+    ids <- "1"
+    plot_selections[["1"]] <- character()
+    data_table_selections[["1"]] <- character()
+    labels[["1"]] <- "No matched case/control subset"
+  }
 
   state <- observatory_state(
     gene_label = gene_label,
@@ -371,12 +328,12 @@ make_link_row <- function(row, metadata, gene_labels) {
       plot_selections = plot_selections,
       data_table_selections = data_table_selections,
       labels = labels,
-      active_selection_id = "3"
+      active_selection_id = ids[1]
     )
   )
 
   url <- paste0("https://ribocrypt.org/#Observatory?obs_state=",
-                state_param(state))
+                dominant_observatory_state_param(state))
   data.table(
     global_review_order = row$global_review_order[1],
     observatory_url = url,
@@ -511,7 +468,7 @@ html <- c(
   "<h1>RDG Active-Review Cards</h1>",
   paste0("<div class=\"note\">Generated ", Sys.time(),
          ". Metadata file available: ", metadata_info$available,
-         ". Links include an empty third all-merged group as an Observatory restore guard.</div>"),
+         ". Links restore explicit case/control cohorts with the current Observatory API.</div>"),
   "<div class=\"grid\">",
   cards,
   "</div></body></html>"
@@ -524,7 +481,7 @@ md_lines <- c(
   paste0("Generated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
   paste0("Metadata file available: ", metadata_info$available),
   "",
-  "The Observatory links include an empty third `All merged` group as a restore guard.",
+  "The Observatory links restore the explicit case/control cohorts without an empty All merged group.",
   "",
   vapply(seq_len(nrow(card_rows)), function(i) {
     row <- card_rows[i]

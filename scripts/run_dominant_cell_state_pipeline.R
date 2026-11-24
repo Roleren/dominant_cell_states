@@ -121,6 +121,16 @@ load_ribocrypt <- function(repo_root) {
   devtools::load_all(repo_root, quiet = TRUE)
 }
 
+pipeline_data_table_threads <- function(setting = Sys.getenv("DOMINANT_DT_THREADS", ""),
+                                        current = data.table::getDTthreads()) {
+  if (!nzchar(setting)) return(min(4L, current))
+  threads <- suppressWarnings(as.integer(setting))
+  if (!grepl("^[0-9]+$", setting) || is.na(threads) || threads < 1L) {
+    stop("DOMINANT_DT_THREADS must be a positive integer.", call. = FALSE)
+  }
+  threads
+}
+
 setup_runtime_env <- function(analysis_dir) {
   # Capture ORFik's already-correct config (resolved via the default,
   # un-redirected BiocFileCache) BEFORE isolating XDG/BFC state below.
@@ -164,6 +174,7 @@ setup_runtime_env <- function(analysis_dir) {
       default = TRUE
     )
   }
+  data.table::setDTthreads(pipeline_data_table_threads())
 }
 
 source_pipeline_cache <- function(analysis_dir) {
@@ -209,6 +220,9 @@ pipeline_steps <- function(analysis_dir) {
       "auxiliary_state_screen",
       "adjusted_enrichment",
       "control_aware",
+      "gene_perturbation_screen",
+      "perturbation_data_gap_map",
+      "gene_translation_regulation_audit",
       "broad_metadata",
       "glmnet",
       "latent",
@@ -217,11 +231,13 @@ pipeline_steps <- function(analysis_dir) {
       "score_semantics",
       "score_semantics_design",
       "rdg_graphs",
+      "denoised_tracks",
       "uorf_structure",
       "next_model",
       "branch_usage",
       "branch_coverage_qc",
       "grouped_branch_usage",
+      "denoising_comparison",
       "branch_allocation",
       "ouorf_cds_coupling",
       "downstream_tis_rescue",
@@ -249,6 +265,8 @@ pipeline_steps <- function(analysis_dir) {
       "therapeutic_hypotheses",
       "therapeutic_perturbation_predictions",
       "rdg_consensus",
+      "consensus_context_consistency_audit",
+      "existing_table_column_dictionaries",
       "rdg_validation_dossiers",
       "rdg_evidence_gaps",
       "merged_replicate_translon_shift",
@@ -276,6 +294,9 @@ pipeline_steps <- function(analysis_dir) {
         "dominant_state_auxiliary_module_screen.R",
         "dominant_cell_state_adjusted_enrichment.R",
         "dominant_cell_state_control_aware_enrichment.R",
+        "dominant_state_gene_perturbation_screen.R",
+        "dominant_state_perturbation_data_gap_map.R",
+        "dominant_state_gene_translation_regulation_audit.R",
         "dominant_state_broad_metadata_model.R",
         "dominant_state_glmnet_metadata_model.R",
         "dominant_state_latent_program_summary.R",
@@ -284,11 +305,13 @@ pipeline_steps <- function(analysis_dir) {
         "dominant_state_score_semantics_comparison.R",
         "dominant_state_score_semantics_design_aware.R",
         "dominant_ribosome_decision_graphs.R",
+        "dominant_denoised_tracks.R",
         "dominant_uorf_structure_rules.R",
         "dominant_next_model_candidate_discovery.R",
         "dominant_rdg_branch_usage_model.R",
         "dominant_rdg_branch_coverage_qc.R",
         "dominant_rdg_grouped_branch_usage_model.R",
+        "dominant_denoising_comparison.R",
         "dominant_rdg_count_aware_branch_allocation.R",
         "dominant_ouorf_cds_coupling_analysis.R",
         "dominant_downstream_tis_rescue_audit.R",
@@ -316,6 +339,8 @@ pipeline_steps <- function(analysis_dir) {
         "dominant_rdg_therapeutic_hypotheses.R",
         "dominant_rdg_therapeutic_perturbation_predictions.R",
         "dominant_rdg_consensus_atlas.R",
+        "dominant_rdg_consensus_context_consistency_audit.R",
+        "dominant_rdg_existing_table_column_dictionaries.R",
         "dominant_rdg_validation_dossiers.R",
         "dominant_rdg_evidence_gap_prioritization.R",
         "dominant_rdg_merged_replicate_translon_shift.R",
@@ -340,17 +365,24 @@ pipeline_step_outputs <- function(analysis_dir) {
   results_dir <- analysis_results_dir(analysis_dir, create = TRUE)
   p <- function(...) file.path(results_dir, ...)
   list(
-    # dominant_manual_translons.R deliberately writes under
-    # <analysis_dir>/manual_translons/ (not results/) because these outputs
-    # are curated/regenerable-from-a-tracked-queue, not purely disposable --
-    # translons_to_be_added_to_manual.txt is git-tracked from that same
-    # directory. Using results_dir here (like every other step) made this
-    # step a permanent cache miss, since its real outputs were never where
-    # the cache checked.
+    denoising_comparison = file.path(p("dominant_denoising_comparison"), c(
+      "gene_overlap_classes.csv", "contrast_library_membership.csv",
+      "paired_library_measurements.csv", "matched_assay_contrasts.csv",
+      "assay_comparison_summary.csv", "denoising_review_queue.csv",
+      "gene_assay_summary.csv", "run_metrics.csv",
+      "shared_region_library_measurements.csv", "shared_region_matched_contrasts.csv"
+    )),
+    denoised_tracks = c(
+      p("dominant_denoised_tracks", "track_manifest.csv"),
+      p("dominant_denoised_tracks", "translon_first_codon_base_measurements.csv"),
+      p("dominant_denoised_tracks", "manifest.qs")
+    ),
+    # Generated manual files belong under results/; only the curated text
+    # queue remains under analysis_dir/manual_translons.
     manual_translons = c(
-      file.path(analysis_dir, "manual_translons", "manual_translons_manifest.csv"),
-      file.path(analysis_dir, "manual_translons", "manual_translons_ranges.rds"),
-      file.path(analysis_dir, "manual_translons", "manual_translon_candidates.csv")
+      p("manual_translons", "manual_translons_manifest.csv"),
+      p("manual_translons", "manual_translons_ranges.qs"),
+      p("manual_translons", "manual_translon_candidates.csv")
     ),
     fst_pages = c(
       p("required_fst_pages.csv"),
@@ -417,6 +449,23 @@ pipeline_step_outputs <- function(analysis_dir) {
       p("dominant_state_control_aware_condition_contrasts.csv"),
       p("dominant_state_control_aware_condition_summary.csv"),
       p("dominant_state_control_aware_enrichment_review.csv")
+    ),
+    gene_perturbation_screen = c(
+      p("dominant_state_gene_perturbation_screen_sample_level.csv"),
+      p("dominant_state_gene_perturbation_screen_sample_level_columns.md"),
+      p("dominant_state_gene_perturbation_screen_gene_state_summary.csv"),
+      p("dominant_state_gene_perturbation_screen_gene_state_summary_columns.md"),
+      p("dominant_state_gene_perturbation_screen_top_hits.csv"),
+      p("dominant_state_gene_perturbation_screen_top_hits_columns.md")
+    ),
+    perturbation_data_gap_map = c(
+      p("dominant_state_perturbation_data_gap_map.csv"),
+      p("dominant_state_perturbation_data_gap_map_columns.md"),
+      p("dominant_state_perturbation_data_gap_map_summary.txt")
+    ),
+    gene_translation_regulation_audit = c(
+      p("dominant_state_gene_translation_regulation_audit.csv"),
+      p("dominant_state_gene_translation_regulation_audit_columns.md")
     ),
     broad_metadata = c(
       p("dominant_state_broad_metadata_main_terms.csv"),
@@ -488,7 +537,7 @@ pipeline_step_outputs <- function(analysis_dir) {
         "uorf_structure_multivariable_rule_models.csv")
     ),
     next_model = c(
-      p("dominant_next_model", "dominant_next_model_candidate_rankings_v4.csv"),
+      p("dominant_next_model", "dominant_next_model_candidate_rankings.csv"),
       p("dominant_next_model",
         "dominant_next_model_cds_buffering_effect_sizes_relevant_rdgs.csv"),
       p("dominant_next_model",
@@ -963,8 +1012,9 @@ pipeline_step_outputs <- function(analysis_dir) {
         "context_partial_pooling_viral_top_effects.png"),
       p("dominant_rdg_context_partial_pooling", "figures",
         "context_partial_pooling_viral_top_effects.html"),
-      p("dominant_rdg_context_partial_pooling", "figures",
-        "context_partial_pooling_ifih1_lung.png")
+      # The IFIH1 lung plot is conditional on an eligible lung contrast.
+      # It is not a required cache output.
+      character()
     ),
     pooling_bias_audit = c(
       p("dominant_rdg_pooling_bias_audit",
@@ -1090,6 +1140,16 @@ pipeline_step_outputs <- function(analysis_dir) {
         "dominant_rdg_consensus_evidence_heatmap.png"),
       p("dominant_rdg_consensus", "figures",
         "dominant_rdg_consensus_class_counts.png")
+    ),
+    consensus_context_consistency_audit = c(
+      p("dominant_rdg_consensus_context_consistency_audit.csv"),
+      p("dominant_rdg_consensus_context_consistency_audit_columns.md"),
+      p("dominant_rdg_consensus_context_consistency_summary.txt")
+    ),
+    existing_table_column_dictionaries = c(
+      p("dominant_rdg_context_interactions",
+        "dominant_rdg_context_interaction_branch_context_effects_columns.md"),
+      p("dominant_rdg_consensus", "dominant_rdg_consensus_candidates_columns.md")
     ),
     rdg_validation_dossiers = c(
       p("dominant_rdg_validation_dossiers",
@@ -1369,7 +1429,9 @@ resolve_metadata_file <- function() {
   if (length(existing)) existing[[1]] else candidates[[1]]
 }
 
-pipeline_step_dependencies <- function(step_name, analysis_dir) {
+pipeline_step_dependencies <- function(step_name, analysis_dir, runtime_inputs = NULL) {
+  source(file.path(analysis_dir, "scripts", "dominant_pipeline_runtime_inputs.R"), local = TRUE)
+  if (is.null(runtime_inputs)) runtime_inputs <- pipeline_runtime_input_files()
   p <- function(...) file.path(analysis_dir, ...)
   rp <- function(...) file.path(analysis_results_dir(analysis_dir), ...)
   metadata_file <- resolve_metadata_file()
@@ -1377,19 +1439,38 @@ pipeline_step_dependencies <- function(step_name, analysis_dir) {
   canonical_isoform_file <- pipeline_canonical_isoform_file()
   base <- switch(
     step_name,
+    denoising_comparison = c(
+      metadata_file,
+      rp("dominant_denoised_tracks", "track_manifest.csv"),
+      rp("dominant_denoised_tracks", "manifest.qs"),
+      rp("dominant_denoised_tracks", "translon_first_codon_base_measurements.csv"),
+      rp("human_dominant_cell_states_clean_cds_gene_diagnostics.csv"),
+      rp("dominant_rdg_outputs", "rdg_feature_annotation.csv"),
+      rp("dominant_uorf_feature_expression.csv"),
+      rp("dominant_rdg_grouped_branch_usage", "dominant_rdg_grouped_branch_usage_contrast_table.csv")
+    ),
+    denoised_tracks = c(
+      rp("human_dominant_cell_states_clean_cds_gene_diagnostics.csv"),
+      rp("dominant_rdg_outputs", "rdg_feature_annotation.csv"),
+      file.path(path.expand(Sys.getenv("FRAMEWINNOW_SOURCE_DIR", "~/shared_workspace/Denoising")),
+        "priors/homo_sapiens/counts/frame_counts-Homo_sapiens.GRCh38.108_ensembl.fst"),
+      list.files(file.path(path.expand(Sys.getenv("FRAMEWINNOW_SOURCE_DIR", "~/shared_workspace/Denoising")),
+        "FrameWinnow", "R"), "[.]R$", full.names = TRUE)
+    ),
     manual_translons = c(
       p("manual_translons", "translons_to_be_added_to_manual.txt")
     ),
     fst_pages = {
-      required <- p("required_fst_pages.csv")
+      required <- rp("required_fst_pages.csv")
       c(
         p("scripts", "dominant_cell_state_required_fst_pages.R"),
         p("scripts", "dominant_state_module_definitions.R"),
         rp("curated_inputs", "expanded_oxphos_marker_genes.csv"),
         rp("curated_inputs", "postviral_fatigue_dominant_state_genes.csv"),
         rp("curated_inputs", "curated_additional_gene_priorities.csv"),
+        p("curated_inputs", "curated_additional_gene_priorities.csv"),
         canonical_isoform_file,
-        outputs$manual_translons,
+        rp("manual_translons", "manual_translons_ranges.qs"),
         required,
         pipeline_read_csv_paths(
           required,
@@ -1402,9 +1483,9 @@ pipeline_step_dependencies <- function(step_name, analysis_dir) {
       rp("curated_inputs", "expanded_oxphos_marker_genes.csv"),
       rp("curated_inputs", "postviral_fatigue_dominant_state_genes.csv"),
       rp("curated_inputs", "curated_additional_gene_priorities.csv"),
-      outputs$fst_pages,
+      p("curated_inputs", "curated_additional_gene_priorities.csv"),
       canonical_isoform_file,
-      outputs$manual_translons
+      rp("manual_translons", "manual_translons_ranges.qs")
     ),
     score_audit = c(
       outputs$clean_cds,
@@ -1422,11 +1503,25 @@ pipeline_step_dependencies <- function(step_name, analysis_dir) {
     ),
     adjusted_enrichment = c(
       metadata_file,
-      outputs$clean_cds
+      outputs$clean_cds,
+      outputs$state_activity_metadata
     ),
     control_aware = c(
       metadata_file,
-      outputs$clean_cds
+      outputs$clean_cds,
+      outputs$state_activity_metadata
+    ),
+    gene_perturbation_screen = c(
+      metadata_file,
+      outputs$clean_cds,
+      p("scripts", "dominant_state_module_definitions.R")
+    ),
+    perturbation_data_gap_map = c(
+      metadata_file
+    ),
+    gene_translation_regulation_audit = c(
+      p("curated_inputs", "gene_translation_regulation_notes.csv"),
+      p("scripts", "dominant_state_module_definitions.R")
     ),
     broad_metadata = c(
       metadata_file,
@@ -1445,8 +1540,8 @@ pipeline_step_dependencies <- function(step_name, analysis_dir) {
     known_uorf = character(),
     uorf_regulation = c(
       metadata_file,
-      outputs$clean_cds,
-      outputs$manual_translons
+      rp("human_dominant_cell_states_clean_cds_gene_diagnostics.csv"),
+      rp("manual_translons", "manual_translons_ranges.qs")
     ),
     score_semantics = c(
       metadata_file,
@@ -1469,7 +1564,8 @@ pipeline_step_dependencies <- function(step_name, analysis_dir) {
       outputs$adjusted_enrichment,
       outputs$broad_metadata,
       outputs$glmnet,
-      outputs$uorf_regulation
+      outputs$uorf_regulation,
+      outputs$state_activity_metadata
     ),
     uorf_structure = c(
       outputs$uorf_regulation,
@@ -1664,6 +1760,15 @@ pipeline_step_dependencies <- function(step_name, analysis_dir) {
       outputs$therapeutic_hypotheses,
       outputs$therapeutic_perturbation_predictions
     ),
+    consensus_context_consistency_audit = c(
+      outputs$rdg_consensus,
+      outputs$context_interactions
+    ),
+    existing_table_column_dictionaries = c(
+      outputs$rdg_consensus,
+      outputs$context_interactions,
+      p("scripts", "dominant_column_dictionary.R")
+    ),
     rdg_validation_dossiers = c(
       outputs$rdg_consensus,
       outputs$rdg_atlas_cards,
@@ -1695,7 +1800,9 @@ pipeline_step_dependencies <- function(step_name, analysis_dir) {
     ),
     rdg_review_links = c(
       outputs$rdg_review_batches,
-      resolve_metadata_file()
+      resolve_metadata_file(),
+      file.path(Sys.getenv("RIBOCRYPT_REPO", unset = path.expand("~/livemount/forks/RiboCrypt")),
+        "R", c("URL_helpers.R", "observatory_url_settings.R", "observatory_browser_page.R"))
     ),
     rdg_review_feedback = c(
       outputs$rdg_review_links,
@@ -1738,11 +1845,24 @@ pipeline_step_dependencies <- function(step_name, analysis_dir) {
       outputs$infected_off_frame_frame_diagnostics,
       p("readlength_inputs", "SRR2052924.bam"),
       p("readlength_inputs", "SRR27450688.bam"),
-      p("readlength_inputs", "PRJNA285961_shifting_tables.rds"),
-      p("readlength_inputs", "PRJNA1062064_shifting_tables.rds")
+      p("readlength_inputs", "PRJNA285961_shifting_tables.qs"),
+      p("readlength_inputs", "PRJNA1062064_shifting_tables.qs")
     ),
     character()
   )
+  # These consumers read sample state scores, not per-gene diagnostics or QC.
+  # A newly curated analysis-only gene therefore need not refit these models.
+  state_only_steps <- c("state_activity_metadata", "adjusted_enrichment",
+    "control_aware", "broad_metadata", "glmnet", "latent", "score_semantics",
+    "score_semantics_design")
+  if (step_name %in% state_only_steps) {
+    unused <- setdiff(outputs$clean_cds,
+      rp("human_dominant_cell_states_clean_cds.csv"))
+    base <- setdiff(base, unused)
+  }
+  # Analytical consumers read the producer tables, not rendered inspection assets.
+  base <- base[!grepl("[.](png|pdf|svg|html)$", base, ignore.case = TRUE)]
+  base <- c(base, pipeline_step_runtime_inputs(step_name, runtime_inputs))
   unique(base[!is.na(base) & nzchar(base)])
 }
 
@@ -1761,6 +1881,9 @@ pipeline_scopes <- function() {
       "auxiliary_state_screen",
       "adjusted_enrichment",
       "control_aware",
+      "gene_perturbation_screen",
+      "perturbation_data_gap_map",
+      "gene_translation_regulation_audit",
       "broad_metadata",
       "glmnet",
       "latent"
@@ -1770,11 +1893,13 @@ pipeline_scopes <- function() {
       "score_semantics",
       "score_semantics_design",
       "rdg_graphs",
+      "denoised_tracks",
       "uorf_structure",
       "next_model",
       "branch_usage",
       "branch_coverage_qc",
       "grouped_branch_usage",
+      "denoising_comparison",
       "branch_allocation",
       "ouorf_cds_coupling",
       "downstream_tis_rescue",
@@ -1802,6 +1927,8 @@ pipeline_scopes <- function() {
       "therapeutic_hypotheses",
       "therapeutic_perturbation_predictions",
       "rdg_consensus",
+      "consensus_context_consistency_audit",
+      "existing_table_column_dictionaries",
       "rdg_validation_dossiers",
       "rdg_evidence_gaps",
       "merged_replicate_translon_shift",
@@ -1828,6 +1955,9 @@ pipeline_scopes <- function() {
       "auxiliary_state_screen",
       "adjusted_enrichment",
       "control_aware",
+      "gene_perturbation_screen",
+      "perturbation_data_gap_map",
+      "gene_translation_regulation_audit",
       "broad_metadata",
       "glmnet",
       "latent",
@@ -1835,11 +1965,13 @@ pipeline_scopes <- function() {
       "score_semantics",
       "score_semantics_design",
       "rdg_graphs",
+      "denoised_tracks",
       "uorf_structure",
       "next_model",
       "branch_usage",
       "branch_coverage_qc",
       "grouped_branch_usage",
+      "denoising_comparison",
       "branch_allocation",
       "ouorf_cds_coupling",
       "downstream_tis_rescue",
@@ -1867,6 +1999,8 @@ pipeline_scopes <- function() {
       "therapeutic_hypotheses",
       "therapeutic_perturbation_predictions",
       "rdg_consensus",
+      "consensus_context_consistency_audit",
+      "existing_table_column_dictionaries",
       "rdg_validation_dossiers",
       "rdg_evidence_gaps",
       "merged_replicate_translon_shift",
@@ -1884,6 +2018,9 @@ pipeline_scopes <- function() {
       "auxiliary_state_screen",
       "adjusted_enrichment",
       "control_aware",
+      "gene_perturbation_screen",
+      "perturbation_data_gap_map",
+      "gene_translation_regulation_audit",
       "broad_metadata",
       "glmnet",
       "latent",
@@ -1892,11 +2029,13 @@ pipeline_scopes <- function() {
       "score_semantics",
       "score_semantics_design",
       "rdg_graphs",
+      "denoised_tracks",
       "uorf_structure",
       "next_model",
       "branch_usage",
       "branch_coverage_qc",
       "grouped_branch_usage",
+      "denoising_comparison",
       "branch_allocation",
       "ouorf_cds_coupling",
       "downstream_tis_rescue",
@@ -1924,6 +2063,8 @@ pipeline_scopes <- function() {
       "therapeutic_hypotheses",
       "therapeutic_perturbation_predictions",
       "rdg_consensus",
+      "consensus_context_consistency_audit",
+      "existing_table_column_dictionaries",
       "rdg_validation_dossiers",
       "rdg_evidence_gaps",
       "merged_replicate_translon_shift",
@@ -2003,7 +2144,7 @@ run_one_step <- function(step_name, script_file, analysis_dir,
     "manual_translon_candidates.csv",
     "manual_translon_requested_gene_uoorf_candidates.csv",
     "manual_translons_manifest.csv",
-    "manual_translons_ranges.rds"
+    "manual_translons_ranges.qs"
   )
   is_analysis_root_arg <- function(x) {
     if (!is.character(x) || length(x) != 1L) return(FALSE)
@@ -2123,24 +2264,17 @@ run_dominant_cell_state_pipeline <- function(scope = "all",
     stringsAsFactors = FALSE
   )
 
+  source(file.path(analysis_dir, "scripts", "dominant_pipeline_runtime_inputs.R"), local = TRUE)
+  runtime_inputs <- pipeline_runtime_input_files()
   output_map <- pipeline_step_outputs(analysis_dir)
-  source_helpers <- file.path(
-    analysis_dir,
-    "scripts",
-    c(
-      "dominant_state_module_definitions.R",
-      "dominant_coverage_cache.R",
-      "dominant_internal_orf_signal_helpers.R",
-      "dominant_htmlwidgets.R"
-    )
-  )
+
 
   if (seed_cache) {
     for (i in seq_len(nrow(step_table))) {
       step_name <- step_table$step[[i]]
       script_file <- step_table$script[[i]]
-      outputs <- output_map[[step_name]]
-      dependencies <- pipeline_step_dependencies(step_name, analysis_dir)
+      outputs <- pipeline_step_cache_outputs(output_map[[step_name]], rdg_plot_mode)
+      dependencies <- pipeline_step_dependencies(step_name, analysis_dir, runtime_inputs)
       started <- Sys.time()
       missing_outputs <- pipeline_missing_outputs(outputs)
       ended <- Sys.time()
@@ -2175,7 +2309,7 @@ run_dominant_cell_state_pipeline <- function(scope = "all",
         outputs = outputs,
         dependencies = dependencies,
         cache_version = cache_version,
-        extra_source_files = source_helpers,
+        extra_source_files = pipeline_step_source_files(script_file, analysis_dir),
         seconds = NA_real_
       )
       message("[", timestamp(), "] seeded cache for ", step_name)
@@ -2205,8 +2339,8 @@ run_dominant_cell_state_pipeline <- function(scope = "all",
   for (i in seq_len(nrow(step_table))) {
     step_name <- step_table$step[[i]]
     script_file <- step_table$script[[i]]
-    outputs <- output_map[[step_name]]
-    dependencies <- pipeline_step_dependencies(step_name, analysis_dir)
+    outputs <- pipeline_step_cache_outputs(output_map[[step_name]], rdg_plot_mode)
+    dependencies <- pipeline_step_dependencies(step_name, analysis_dir, runtime_inputs)
     started <- Sys.time()
     forced <- isTRUE(force) || step_name %in% force_steps
 
@@ -2218,8 +2352,18 @@ run_dominant_cell_state_pipeline <- function(scope = "all",
         outputs = outputs,
         dependencies = dependencies,
         cache_version = cache_version,
-        extra_source_files = source_helpers
+        extra_source_files = pipeline_step_source_files(script_file, analysis_dir)
       )
+      if (isTRUE(cache_state$valid) && step_name %in% c("denoised_tracks", "denoising_comparison")) {
+        track_manifest <- qs2::qs_read(file.path(results_dir, "dominant_denoised_tracks", "manifest.qs"), nthreads = 1)
+        info <- file.info(track_manifest$files$path)
+        current <- data.frame(path = track_manifest$files$path, size = info$size,
+                              mtime = as.numeric(info$mtime))
+        if (!identical(current, track_manifest$files)) {
+          cache_state$valid <- FALSE
+          cache_state$reason <- "referenced denoising output changed or disappeared"
+        }
+      }
       if (isTRUE(cache_state$valid)) {
         ended <- Sys.time()
         message("[", timestamp(), "] skipping ", step_name,
@@ -2268,7 +2412,7 @@ run_dominant_cell_state_pipeline <- function(scope = "all",
         outputs = outputs,
         dependencies = dependencies,
         cache_version = cache_version,
-        extra_source_files = source_helpers,
+        extra_source_files = pipeline_step_source_files(script_file, analysis_dir),
         seconds = elapsed
       )
       cache_reason <- paste0("cache manifest written: ", basename(cache_file))
@@ -2468,6 +2612,6 @@ run_dominant_cell_state_pipeline_cli <- function(args = commandArgs(trailingOnly
   )
 }
 
-if (any(grepl("^--file=", commandArgs(trailingOnly = FALSE)))) {
+if (sys.nframe() == 0L && any(grepl("^--file=", commandArgs(trailingOnly = FALSE)))) {
   run_dominant_cell_state_pipeline_cli()
 }

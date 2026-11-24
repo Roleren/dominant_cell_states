@@ -26,6 +26,10 @@ repo_root <- analysis_dir
 script_dir <- file.path(analysis_dir, "scripts")
 source(file.path(script_dir, "dominant_pipeline_cache.R"))
 source(file.path(script_dir, "run_dominant_cell_state_pipeline.R"))
+setup_runtime_env(analysis_dir)
+load_ribocrypt(find_repo_root(analysis_dir))
+source(file.path(script_dir, "dominant_pipeline_runtime_inputs.R"))
+runtime_inputs <- pipeline_runtime_input_files()
 
 steps <- pipeline_steps(analysis_dir)
 outputs <- pipeline_step_outputs(analysis_dir)
@@ -33,23 +37,21 @@ cache_version <- Sys.getenv(
   "DOMINANT_PIPELINE_CACHE_VERSION",
   "dominant-pipeline-cache-v1"
 )
-source_helpers <- file.path(
-  script_dir,
-  c("dominant_state_module_definitions.R", "dominant_coverage_cache.R")
-)
+
 
 timing <- system.time({
   status_dt <- rbindlist(lapply(seq_len(nrow(steps)), function(i) {
     step <- steps$step[[i]]
-    deps <- pipeline_step_dependencies(step, analysis_dir)
+    deps <- pipeline_step_dependencies(step, analysis_dir, runtime_inputs = runtime_inputs)
     status <- pipeline_cache_status(
       step_name = step,
       script_file = steps$script[[i]],
       analysis_dir = analysis_dir,
-      outputs = outputs[[step]],
+      outputs = pipeline_step_cache_outputs(outputs[[step]],
+        Sys.getenv("DOMINANT_RDG_PLOT_MODE", "all")),
       dependencies = deps,
       cache_version = cache_version,
-      extra_source_files = source_helpers
+      extra_source_files = pipeline_step_source_files(steps$script[[i]], analysis_dir)
     )
     data.table(
       step = step,

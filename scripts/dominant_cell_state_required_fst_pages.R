@@ -34,6 +34,8 @@ message("  3. Match those regions to coverage_index.fst page intervals")
 message("  4. Save one complete page-list product and a gene-to-page audit table")
 
 analysis_dir <- if (dir.exists("dominant_cell_states")) "dominant_cell_states" else "."
+source(file.path(analysis_dir, "scripts", "dominant_object_cache.R"), local = TRUE)
+source(file.path(analysis_dir, "scripts", "dominant_transcript_mapping.R"), local = TRUE)
 results_dir <- Sys.getenv(
   "DOMINANT_CELL_STATES_RESULTS_DIR",
   unset = file.path(analysis_dir, "results")
@@ -56,7 +58,7 @@ module_definition_file <- file.path(
 if (!file.exists(module_definition_file)) {
   stop("Missing dominant-state module definition file: ", module_definition_file)
 }
-source(module_definition_file)
+source(module_definition_file, local = TRUE)
 dominant_state_modules <- load_dominant_state_modules(analysis_dir)
 
 module_membership <- rbindlist(lapply(seq_len(nrow(dominant_state_modules)), function(i) {
@@ -97,7 +99,7 @@ range_positions <- function(grl) {
 safe_pmap_positions <- function(query, subject) {
   if (length(query) == 0 || length(subject) == 0) return(integer())
   mapped <- tryCatch(
-    suppressWarnings(pmapToTranscriptF(query, subject)),
+    suppressWarnings(dominant_checked_pmap(query, subject)),
     error = function(e) GRangesList()
   )
   range_positions(mapped)
@@ -117,9 +119,10 @@ make_display_region <- function(leader_tx, cds_tx, tx_id) {
 
 load_translon_source <- function(paths, source) {
   path <- unique(paths)
+  path <- unname(vapply(path, dominant_preferred_object_file, character(1)))
   path <- path[file.exists(path)][1]
   if (is.na(path)) return(GRangesList())
-  translons <- read_RDSQS(path)
+  translons <- dominant_read_external_object(path)
   mcols(translons)$translon_source <- source
   translons
 }
@@ -138,8 +141,9 @@ load_predicted_translons <- function(df) {
               "predicted_translons_ranges.qs")
   )
   m_paths <- c(
-    file.path("dominant_cell_states", "manual_translons", "manual_translons_ranges.rds"),
-    file.path("manual_translons", "manual_translons_ranges.rds")
+    result_file("manual_translons", "manual_translons_ranges.qs"),
+    file.path("dominant_cell_states", "manual_translons", "manual_translons_ranges.qs"),
+    file.path("manual_translons", "manual_translons_ranges.qs")
   )
   t <- load_translon_source(t_paths, "T")
   tc <- load_translon_source(tc_paths, "TC")
@@ -187,27 +191,20 @@ load_symbol_table <- function(df) {
 
 collapse_to_tx_iranges <- function(mapped) {
   starts <- vapply(mapped, function(x) {
-    if (length(x) == 0) return(NA_integer_)
+    if (length(x) == 0) return(0L)
     min(start(x))
   }, integer(1))
   ends <- vapply(mapped, function(x) {
-    if (length(x) == 0) return(NA_integer_)
+    if (length(x) == 0) return(-1L)
     max(end(x))
   }, integer(1))
   IRanges(start = starts, end = ends)
 }
 
 safe_pmap_translons_to_transcript <- function(translons, mrna) {
-  mapped_list <- lapply(seq_along(translons), function(i) {
-    tx_id <- names(translons)[i]
-    tryCatch(
-      suppressWarnings(pmapToTranscriptF(translons[i], mrna[tx_id])[[1]]),
-      error = function(e) GRanges()
-    )
-  })
-  mapped <- GRangesList(mapped_list)
-  names(mapped) <- names(translons)
-  mapped
+  # Invalid pairs are filtered by the checked mapper, so valid pairs can use
+  # the vectorized mapping path without aborting on a single malformed ORF.
+  dominant_checked_pmap(translons, mrna[names(translons)])
 }
 
 annotate_translon_categories <- function(translons, cds, mrna) {
@@ -223,7 +220,7 @@ annotate_translon_categories <- function(translons, cds, mrna) {
   mapped <- safe_pmap_translons_to_transcript(translons, mrna)
   tx_iranges <- collapse_to_tx_iranges(mapped)
   valid <- !is.na(start(tx_iranges)) & !is.na(end(tx_iranges)) &
-    end(tx_iranges) >= start(tx_iranges)
+    start(tx_iranges) >= 1L & end(tx_iranges) >= start(tx_iranges)
   if (!all(valid)) {
     warning("Dropping ", sum(!valid),
             " predicted translons with invalid transcript-coordinate ranges.")
@@ -233,7 +230,8 @@ annotate_translon_categories <- function(translons, cds, mrna) {
   if (length(translons) == 0) return(translons)
   categories <- rep(NA_character_, length(translons))
 
-  valid <- !is.na(start(tx_iranges)) & !is.na(end(tx_iranges))
+  valid <- !is.na(start(tx_iranges)) & !is.na(end(tx_iranges)) &
+    start(tx_iranges) >= 1L & end(tx_iranges) >= start(tx_iranges)
   if (any(valid)) {
     groupings <- match(names(translons)[valid], names(mrna))
     categories[valid] <- ORFik:::categorize_ORFs(
@@ -519,7 +517,18 @@ selected_transcripts <- rbindlist(lapply(target_genes, function(gene) {
       is_canonical_isoform = NA
     ))
   }
-  choose_gene_transcript(gene, tx_ids, cds_all, leader_all, translons)
+  signature <- list(
+    computation = dominant_computation_signature(choose_gene_transcript),
+    gene = gene, cds = cds_all[intersect(tx_ids, names(cds_all))], leader = leader_all[intersect(tx_ids, names(leader_all))],
+    translons = translons[names(translons) %chin% tx_ids],
+    canonical = intersect(tx_ids, canonical_tx), exon_qc = NULL,
+    orfik_version = dominant_orfik_cache_version()
+  )
+  dominant_cached_object(
+    file.path(analysis_dir, "results", ".measurement_cache"),
+    paste0("selection_fst_", gene), signature,
+    function() choose_gene_transcript(gene, tx_ids, cds_all, leader_all, translons)
+  )
 }), fill = TRUE)
 
 selected_transcripts <- merge(
