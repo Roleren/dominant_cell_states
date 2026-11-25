@@ -637,17 +637,24 @@ measure_gene_clean_cds <- function(selected, cds_all, leader_all, translons,
   coverage_matrix <- as.matrix(coverage)
   storage.mode(coverage_matrix) <- "numeric"
 
-  run_order <- colnames(coverage_matrix)
-  if (!all(run_order %in% names(lib_sizes))) {
-    stop("Coverage FST columns are not all present in library size vector.")
+  # The coverage FST can be built from a different run set than the current
+  # experiment / totalCounts_mrna vector (runs added or dropped since the FST
+  # was built). Measure only the runs present in both; every other run in the
+  # library-size vector is returned as NA so the result always spans
+  # names(lib_sizes) (== runIDs(df)) in order.
+  run_order <- names(lib_sizes)
+  common <- intersect(run_order, colnames(coverage_matrix))
+  if (length(common) == 0L) {
+    stop("No coverage FST columns match the library size vector.")
   }
 
-  clean_sum <- colSums(coverage_matrix[clean_positions, , drop = FALSE],
+  clean_sum <- colSums(coverage_matrix[clean_positions, common, drop = FALSE],
                        na.rm = TRUE)
   clean_kb <- length(clean_positions) / 1000
-  lib_millions <- as.numeric(lib_sizes[run_order]) / 1e6
-  fpkm_like <- (clean_sum / clean_kb) / lib_millions
+  lib_millions <- as.numeric(lib_sizes[common]) / 1e6
+  fpkm_like <- rep(NA_real_, length(run_order))
   names(fpkm_like) <- run_order
+  fpkm_like[common] <- (clean_sum[common] / clean_kb) / lib_millions
   fpkm_like
 }
 
@@ -819,7 +826,7 @@ expr_list <- lapply(seq_len(nrow(selected_transcripts)), function(i) {
     paste0("clean_cds_", selected$gene_symbol, "_", tx_id), signature,
     function() measure_gene_clean_cds(selected, cds_all, leader_all, translons,
                                     fst_index, lib_sizes),
-    cacheable = function(value) all(is.finite(value))
+    cacheable = function(value) any(is.finite(value))
   )
 })
 
