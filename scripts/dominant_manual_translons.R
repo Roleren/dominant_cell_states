@@ -291,7 +291,8 @@ genomic_string <- function(gr) {
 }
 
 score_with_merged_rfp <- function(df_activity, candidates, mrna) {
-  libs <- outputLibs(df_activity, type = "pshifted", output.mode = "envirlist")
+  # P-site coverage as covRle (~12 GB for the human master) instead of the pshifted GRanges (> 50 GB).
+  libs <- outputLibs(df_activity, type = "cov", output.mode = "envirlist")
   if (length(libs) < 1) {
     stop("No pshifted libraries were returned by outputLibs() for the all-merged experiment (", Sys.getenv("RDG_SDRIVE_EXPERIMENT", unset = "all_merged-Homo_sapiens"), ").")
   }
@@ -304,8 +305,13 @@ score_with_merged_rfp <- function(df_activity, candidates, mrna) {
   orf_stats <- ORFik:::coveragePerORFStatistics(candidates, rfp)
   upstream_stats <- ORFik:::coveragePerORFStatistics(upstream_gr, rfp)
   downstream_stats <- ORFik:::coveragePerORFStatistics(downstream_gr, rfp)
-  start_reads <- countOverlapsW(start_gr, rfp, weight = "score")
-  stop_reads <- countOverlapsW(stop_gr, rfp, weight = "score")
+  site_reads <- function(sites) {
+    cov <- coveragePerTiling(groupGRangesBy(sites, seq_along(sites)), rfp, as.data.table = TRUE)
+    out <- numeric(length(sites)); agg <- cov[, .(n = sum(count)), by = genes]
+    out[agg$genes] <- agg$n; out
+  }
+  start_reads <- site_reads(start_gr)
+  stop_reads <- site_reads(stop_gr)
 
   predicted <- (orf_stats$mean > upstream_stats$mean * 1.3) &
     orf_stats$ORFScores > 2.5 &
@@ -395,7 +401,7 @@ activity_signature <- list(
   version = "manual-activity-v1",
   candidates = uo_candidates,
   mrna = mrna[unique(names(uo_candidates))],
-  coverage_files = dominant_input_files(ORFik::filepath(df_activity, "pshifted")),
+  coverage_files = dominant_input_files(ORFik::filepath(df_activity, "cov")),
   unique_mappers = ORFik::uniqueMappers(df_activity),
   scorer = dominant_function_signature(score_with_merged_rfp),
   orfik_scorer = dominant_function_signature(ORFik:::coveragePerORFStatistics),
