@@ -425,6 +425,19 @@ candidate_dt[, selection_reason := fifelse(
   NA_character_
 )]
 
+# Manual coordinates are transcript coordinates for one isoform; if the resolved transcript is shorter (another
+# isoform was selected), skip the row with a warning instead of stopping the pipeline.
+fixed_tx_width <- widthPerGroup(mrna, TRUE)[fixed_manual_targets$tx_id]
+fixed_oob <- is.na(fixed_tx_width) | fixed_manual_targets$tx_end > fixed_tx_width
+if (any(fixed_oob)) {
+  skipped <- cbind(fixed_manual_targets[fixed_oob], tx_width = fixed_tx_width[fixed_oob])
+  warning("Skipping manual translons outside their transcript: ",
+          paste0(skipped$gene_symbol, " ", skipped$tx_id, " ", skipped$tx_start, "-", skipped$tx_end,
+                 " (tx width ", skipped$tx_width, ")", collapse = "; "), call. = FALSE)
+  fwrite(skipped, file.path(manual_dir, "manual_translons_skipped_out_of_bounds.csv"))
+  fixed_manual_targets <- fixed_manual_targets[!fixed_oob]
+}
+
 fixed_iranges <- IRangesList(lapply(seq_len(nrow(fixed_manual_targets)), function(i) {
   IRanges(fixed_manual_targets$tx_start[[i]], fixed_manual_targets$tx_end[[i]])
 }))
