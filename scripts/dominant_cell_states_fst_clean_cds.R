@@ -911,11 +911,13 @@ dominant_state_scores <- rbindlist(lapply(seq_len(nrow(dominant_state_modules)),
 
 dominant_state_qc_annotations <- dominant_state_scores[
   dominant_state != "Baseline (control)",
-  .SD[which.max(score)],
+  # Runs without FST coverage (NA scores) keep one row with an NA state.
+  .SD[if (all(is.na(score))) 1L else which.max(score)],
   by = Run
 ][
   ,
-  .(Run, sample, dominant_state, dominant_state_score = score)
+  .(Run, sample, dominant_state = fifelse(is.na(score), NA_character_, dominant_state),
+    dominant_state_score = score)
 ]
 
 dominant_state_scores_wide <- dcast(
