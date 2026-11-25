@@ -861,8 +861,10 @@ if (nrow(oxphos_clean_cds) > 0) {
   )
 }
 
-stopifnot(uniqueN(labels[label_semantics == raw_semantics, Run]) == nrow(state_dt))
-stopifnot(uniqueN(labels[label_semantics == percentile_semantics, Run]) == nrow(state_dt))
+# Runs without FST coverage carry an NA state (clean_cds) and get no winner label.
+n_scored_runs <- state_dt[is.finite(dominant_state_score), uniqueN(Run)]
+stopifnot(uniqueN(labels[label_semantics == raw_semantics, Run]) == n_scored_runs)
+stopifnot(uniqueN(labels[label_semantics == percentile_semantics, Run]) == n_scored_runs)
 stopifnot(all(clean_cds_contrasts$feature_id == "clean_CDS"))
 
 message("Dominant-state score-semantics comparison:")
