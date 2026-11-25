@@ -129,10 +129,14 @@ dcs_evidence_rung <- function(deviates, feature = FALSE, term = FALSE,
 #' @return Character phrase.
 #' @export
 dcs_claim_wording <- function(rung, feature = "feature", regulator = "R") {
-  unname(c(none = "no deviation beyond the band",
-           A0 = "deviates",
-           A1 = paste0("deviation is associated with ", feature),
-           A2 = paste0("explained by term ", feature),
-           A3 = paste0("matches the signature of ", regulator),
-           A4 = paste0("because of ", regulator))[rung])
+  n <- length(rung)
+  feature <- rep_len(as.character(feature), n); regulator <- rep_len(as.character(regulator), n)
+  out <- rep(NA_character_, n)
+  out[rung %in% "none"] <- "no deviation beyond the band"
+  out[rung %in% "A0"] <- "deviates"
+  i <- rung %in% "A1"; out[i] <- paste0("deviation is associated with ", feature[i])
+  i <- rung %in% "A2"; out[i] <- paste0("explained by term ", feature[i])
+  i <- rung %in% "A3"; out[i] <- paste0("matches the signature of ", regulator[i])
+  i <- rung %in% "A4"; out[i] <- paste0("because of ", regulator[i])
+  out
 }

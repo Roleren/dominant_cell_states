@@ -50,4 +50,6 @@ test_that("evidence rung and wording", {
   expect_equal(r, c("A0", "A1", "A2", "none", "A4"))
   expect_equal(dcs_claim_wording("A4", regulator = "eIF5A"), "because of eIF5A")
   expect_false(grepl("because", dcs_claim_wording("A3", regulator = "eIF5A")))
+  w <- dcs_claim_wording(c("A0", "A3", "A4", "none"), feature = "x", regulator = c("a", "b", "c", "d"))
+  expect_equal(w, c("deviates", "matches the signature of b", "because of c", "no deviation beyond the band"))
 })
